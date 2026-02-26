@@ -227,7 +227,7 @@ training:
   optimizer: adam
   lr: 1.0e-3
   batch_size: 8
-  num_epochs: 50
+  num_epochs: 1
   use_5fold_cv: true
 ```
 

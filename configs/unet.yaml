@@ -15,7 +15,7 @@ training:
   lr: 1.0e-3
   weight_decay: 1.0e-4
   batch_size: 4
-  num_epochs: 1
+  num_epochs: 50
   use_5fold_cv: true
   num_folds: 5
   loss: combined  # bce_dice + classification_bce

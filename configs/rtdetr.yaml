@@ -20,7 +20,7 @@ training:
   backbone_lr: 1.0e-5
   weight_decay: 1.0e-4
   batch_size: 4
-  num_epochs: 1
+  num_epochs: 50
   use_5fold_cv: false
 
 callbacks:

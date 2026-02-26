@@ -227,7 +227,7 @@ training:
   optimizer: adam
   lr: 1.0e-3
   batch_size: 8
-  num_epochs: 1
+  num_epochs: 50
   use_5fold_cv: true
 ```
 
@@ -255,7 +255,7 @@ os.makedirs("images", exist_ok=True)
 !python scripts/prepare_data.py --no-yolo
 
 # ── Cell 4: 1-epoch smoke test (edit config first) ─────────────────────────
-# Option A — edit configs/unet.yaml and set num_epochs: 1
+# Option A — edit configs/unet.yaml and set num_epochs: 50
 !python scripts/train.py --config configs/unet.yaml --device cuda
 
 # Option B — override from command line (if supported by your argparse setup)

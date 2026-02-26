@@ -15,7 +15,7 @@ training:
   optimizer: auto
   lr: 1.0e-3
   batch_size: 16
-  num_epochs: 1
+  num_epochs: 50
   imgsz: 640
   use_5fold_cv: false
   device: 0  # GPU index

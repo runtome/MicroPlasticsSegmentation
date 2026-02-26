@@ -19,7 +19,7 @@ training:
   lr: 6.0e-5
   weight_decay: 0.01
   batch_size: 4
-  num_epochs: 1
+  num_epochs: 50
   warmup_epochs: 3
   use_5fold_cv: false
   loss: cross_entropy

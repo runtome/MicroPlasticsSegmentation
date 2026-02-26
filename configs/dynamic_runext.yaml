@@ -1,0 +1,36 @@
+defaults:
+  - base
+
+model:
+  name: dynamic_runext
+  in_channels: 3
+  num_classes: 3
+  base_channels: 64
+  depth: 4
+  dropout: 0.3
+
+training:
+  optimizer: adam
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  batch_size: 8
+  num_epochs: 50
+  use_5fold_cv: true
+  num_folds: 5
+  loss: combined
+
+callbacks:
+  early_stopping:
+    patience: 10
+    monitor: val_loss
+  reduce_lr:
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-6
+  checkpoint:
+    monitor: val_miou
+    save_top_k: 1
+
+output:
+  checkpoint_dir: outputs/checkpoints/dynamic_runext/
+  log_dir: outputs/logs/dynamic_runext/

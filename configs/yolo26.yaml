@@ -1,0 +1,25 @@
+defaults:
+  - base
+
+model:
+  name: yolo26
+  variants: [yolo11s-seg, yolo11m-seg, yolo11x-seg]  # Ultralytics seg models
+  num_classes: 3
+  class_names: [Fiber, Fragment, Film]
+
+data:
+  yolo_data_dir: data_splits/yolo/
+  yolo_yaml: data_splits/yolo/dataset.yaml
+
+training:
+  optimizer: auto
+  lr: 1.0e-3
+  batch_size: 16
+  num_epochs: 50
+  imgsz: 640
+  use_5fold_cv: false
+  device: 0  # GPU index
+
+output:
+  checkpoint_dir: outputs/checkpoints/yolo26/
+  log_dir: outputs/logs/yolo26/

@@ -1,0 +1,30 @@
+defaults:
+  - base
+
+model:
+  name: sam2
+  model_cfg: sam2_hiera_small.yaml
+  checkpoint: sam2_hiera_small.pt  # auto-downloaded
+  freeze_image_encoder: true
+  num_classes: 3
+
+training:
+  optimizer: adamw
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  batch_size: 4
+  num_epochs: 30
+  use_5fold_cv: false
+  loss: sam2  # dice + focal + iou
+
+callbacks:
+  early_stopping:
+    patience: 10
+    monitor: val_loss
+  checkpoint:
+    monitor: val_miou
+    save_top_k: 1
+
+output:
+  checkpoint_dir: outputs/checkpoints/sam2/
+  log_dir: outputs/logs/sam2/

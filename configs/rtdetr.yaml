@@ -1,0 +1,40 @@
+defaults:
+  - base
+
+model:
+  name: rtdetr
+  pretrained_model: PekingU/rtdetr-r50
+  num_classes: 3
+  id2label:
+    0: Fiber
+    1: Fragment
+    2: Film
+  label2id:
+    Fiber: 0
+    Fragment: 1
+    Film: 2
+
+training:
+  optimizer: adamw
+  lr: 1.0e-4
+  backbone_lr: 1.0e-5
+  weight_decay: 1.0e-4
+  batch_size: 4
+  num_epochs: 50
+  use_5fold_cv: false
+
+callbacks:
+  early_stopping:
+    patience: 10
+    monitor: val_loss
+  reduce_lr:
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-7
+  checkpoint:
+    monitor: val_map50
+    save_top_k: 1
+
+output:
+  checkpoint_dir: outputs/checkpoints/rtdetr/
+  log_dir: outputs/logs/rtdetr/

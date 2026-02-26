@@ -1,0 +1,41 @@
+defaults:
+  - base
+
+model:
+  name: segformer
+  pretrained_model: nvidia/mit-b2
+  num_classes: 3
+  id2label:
+    0: Fiber
+    1: Fragment
+    2: Film
+  label2id:
+    Fiber: 0
+    Fragment: 1
+    Film: 2
+
+training:
+  optimizer: adamw
+  lr: 6.0e-5
+  weight_decay: 0.01
+  batch_size: 8
+  num_epochs: 50
+  warmup_epochs: 3
+  use_5fold_cv: false
+  loss: cross_entropy
+
+callbacks:
+  early_stopping:
+    patience: 10
+    monitor: val_loss
+  reduce_lr:
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-7
+  checkpoint:
+    monitor: val_miou
+    save_top_k: 1
+
+output:
+  checkpoint_dir: outputs/checkpoints/segformer/
+  log_dir: outputs/logs/segformer/

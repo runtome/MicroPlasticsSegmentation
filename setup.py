@@ -1,0 +1,28 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="microplastics_segmentation",
+    version="0.1.0",
+    packages=find_packages(),
+    install_requires=[
+        "torch>=2.1.0",
+        "torchvision>=0.16.0",
+        "transformers>=4.40.0",
+        "albumentations>=1.4.0",
+        "ultralytics>=8.2.0",
+        "opencv-python>=4.9.0",
+        "pycocotools>=2.0.7",
+        "tensorboard>=2.16.0",
+        "matplotlib>=3.8.0",
+        "pandas>=2.2.0",
+        "scipy>=1.12.0",
+        "numpy>=1.26.0",
+        "Pillow>=10.2.0",
+        "scikit-learn>=1.4.0",
+        "pyyaml>=6.0.1",
+        "tqdm>=4.66.0",
+        "timm>=0.9.16",
+        "einops>=0.7.0",
+    ],
+    python_requires=">=3.9",
+)

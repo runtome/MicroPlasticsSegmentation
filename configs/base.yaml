@@ -1,0 +1,19 @@
+data:
+  images_dir: /kaggle/input/microplasticssegmentation/images/
+  annotation: /kaggle/input/microplasticssegmentation/annotation.json
+  splits_file: data_splits/splits.json
+  image_size: 640
+  num_classes: 3
+  class_names: [Fiber, Fragment, Film]
+  class_ids: [1, 2, 3]
+
+training:
+  output_dir: outputs/
+  seed: 42
+  use_5fold_cv: false
+  num_folds: 5
+  device: cuda  # or cpu
+
+logging:
+  tensorboard_dir: outputs/logs/
+  log_interval: 10  # batches

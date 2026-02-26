@@ -1,0 +1,52 @@
+images/
+referance/
+annotation.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data splits and outputs
+data_splits/
+outputs/
+*.pth
+*.onnx
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# YOLO runs
+runs/
+wandb/
+
+# Model weights (YOLO/Ultralytics auto-downloaded)
+*.pt
+
+# Jupyter / Kaggle notebook checkpoints
+*.ipynb_checkpoints/
+.ipynb_checkpoints/
+
+# Kaggle working directory
+/kaggle/
+
+# TensorBoard event files
+events.out.tfevents.*
+
+# Coverage / test artifacts
+.coverage
+htmlcov/

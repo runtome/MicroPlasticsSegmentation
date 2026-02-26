@@ -108,7 +108,6 @@ class Trainer:
                 factor=rlrop.get("factor", 0.5),
                 patience=rlrop.get("patience", 5),
                 min_lr=rlrop.get("min_lr", 1e-6),
-                verbose=True,
             )
         return None
 

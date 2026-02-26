@@ -6,6 +6,8 @@ Usage:
     python scripts/train.py --config configs/unet.yaml --fold 0
     python scripts/train.py --config configs/mask_rcnn.yaml
     python scripts/train.py --config configs/yolo26.yaml
+    python scripts/train.py --config all               # train every model sequentially
+    python scripts/train.py --config all --device cuda # override device for all
 """
 import argparse
 import os
@@ -81,45 +83,43 @@ def get_model(config: dict):
     return model_class(config)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Train a microplastics segmentation model")
-    parser.add_argument("--config", required=True, help="Path to config YAML")
-    parser.add_argument("--fold", type=int, default=None, help="Specific fold for k-fold CV (0-indexed)")
-    parser.add_argument("--device", default=None, help="Override device (cuda/cpu)")
-    parser.add_argument("--resume", default=None, help="Resume from checkpoint path")
-    args = parser.parse_args()
+def _get_all_configs() -> list:
+    """Return all model config paths (everything in configs/ except base.yaml)."""
+    configs_dir = Path(__file__).parent.parent / "configs"
+    return sorted(
+        p for p in configs_dir.glob("*.yaml")
+        if p.name != "base.yaml"
+    )
 
-    config = load_config(args.config)
-    model_name = config.get("model", {}).get("name", "model")
 
-    # Override device
-    if args.device:
-        config.setdefault("training", {})["device"] = args.device
+def train_one(config_path: str, device: str = None, fold: int = None, resume: str = None):
+    """Train a single model config. Returns (model_name, best_metrics or error string)."""
+    config = load_config(config_path)
+    model_name = config.get("model", {}).get("name", Path(config_path).stem)
 
-    device = config.get("training", {}).get("device", "cuda")
+    if device:
+        config.setdefault("training", {})["device"] = device
+
+    effective_device = config.get("training", {}).get("device", "cuda")
     seed = config.get("training", {}).get("seed", 42)
     set_seed(seed)
 
-    print(f"Training: {model_name}")
-    print(f"Device: {device}")
-    print(f"Config: {args.config}")
+    print(f"\nTraining: {model_name}")
+    print(f"Device: {effective_device}")
+    print(f"Config: {config_path}")
 
-    # Special handling for YOLO
     if model_name == "yolo26":
         _train_yolo(config)
-        return
+        return model_name, {"status": "completed"}
 
-    # Build model
     model = get_model(config)
     print(f"Parameters: {model.count_parameters():,}")
 
-    # Load checkpoint if resuming
-    if args.resume:
-        state = torch.load(args.resume, map_location=device)
+    if resume:
+        state = torch.load(resume, map_location=effective_device)
         model.load_state_dict(state["model_state_dict"])
-        print(f"Resumed from {args.resume}")
+        print(f"Resumed from {resume}")
 
-    # Build data
     data_cfg = config["data"]
     images_dir = data_cfg["images_dir"]
     annotation_path = data_cfg["annotation"]
@@ -131,12 +131,10 @@ def main():
     from data.dataloader import build_dataloader
     from training.trainer import Trainer
 
-    trainer = Trainer(model, config, device=device)
-
+    trainer = Trainer(model, config, device=effective_device)
     use_cv = config.get("training", {}).get("use_5fold_cv", False)
 
-    if use_cv and args.fold is None:
-        # Run full 5-fold CV
+    if use_cv and fold is None:
         results = trainer.fit_kfold(
             images_dir=images_dir,
             annotation_path=annotation_path,
@@ -145,10 +143,8 @@ def main():
             num_workers=num_workers,
             image_size=image_size,
         )
-        print("\nFold results:", results)
+        return model_name, results
     else:
-        # Single run
-        fold = args.fold
         train_loader = build_dataloader(
             "train", images_dir, annotation_path, splits_file,
             batch_size=batch_size, num_workers=num_workers,
@@ -159,11 +155,63 @@ def main():
             batch_size=batch_size, num_workers=num_workers,
             image_size=image_size, fold=fold,
         )
-
         print(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
         best = trainer.fit(train_loader, val_loader, fold=fold)
-        print(f"\nBest checkpoint: {best.get('checkpoint_path', 'N/A')}")
-        print(f"Best val_miou: {best.get('val_miou', best.get('val_val_miou', 'N/A'))}")
+        print(f"Best checkpoint: {best.get('checkpoint_path', 'N/A')}")
+        return model_name, best
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Train a microplastics segmentation model")
+    parser.add_argument(
+        "--config", required=True,
+        help="Path to config YAML, or 'all' to train every model sequentially",
+    )
+    parser.add_argument("--fold", type=int, default=None, help="Specific fold for k-fold CV (0-indexed)")
+    parser.add_argument("--device", default=None, help="Override device (cuda/cpu)")
+    parser.add_argument("--resume", default=None, help="Resume from checkpoint path")
+    args = parser.parse_args()
+
+    # ── Train ALL models ─────────────────────────────────────────────────────
+    if args.config.lower() == "all":
+        configs = _get_all_configs()
+        if not configs:
+            print("No model configs found in configs/ (excluding base.yaml).")
+            return
+
+        print(f"Training {len(configs)} models: {[c.stem for c in configs]}")
+        summary = {}
+        for cfg_path in configs:
+            try:
+                name, result = train_one(
+                    str(cfg_path), device=args.device,
+                    fold=args.fold, resume=args.resume,
+                )
+                summary[name] = {"status": "ok", "result": result}
+            except Exception as e:
+                print(f"\n[ERROR] {cfg_path.stem} failed: {e}")
+                summary[cfg_path.stem] = {"status": "error", "error": str(e)}
+
+        print("\n" + "=" * 60)
+        print("ALL-MODELS TRAINING SUMMARY")
+        print("=" * 60)
+        for name, info in summary.items():
+            if info["status"] == "ok":
+                res = info["result"]
+                if isinstance(res, dict):
+                    miou = res.get("val_miou", res.get("val_val_miou", "N/A"))
+                    ckpt = res.get("checkpoint_path", "N/A")
+                    print(f"  [OK]    {name:<25} val_miou={miou}  ckpt={ckpt}")
+                else:
+                    print(f"  [OK]    {name}")
+            else:
+                print(f"  [FAIL]  {name:<25} {info['error']}")
+        return
+
+    # ── Train single model ────────────────────────────────────────────────────
+    name, best = train_one(args.config, device=args.device, fold=args.fold, resume=args.resume)
+    if isinstance(best, dict):
+        print(f"\nBest val_miou: {best.get('val_miou', best.get('val_val_miou', 'N/A'))}")
 
 
 def _train_yolo(config: dict):

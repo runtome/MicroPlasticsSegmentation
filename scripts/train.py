@@ -10,6 +10,7 @@ Usage:
     python scripts/train.py --config all --device cuda # override device for all
 """
 import argparse
+import gc
 import os
 import sys
 import random
@@ -143,6 +144,8 @@ def train_one(config_path: str, device: str = None, fold: int = None, resume: st
             num_workers=num_workers,
             image_size=image_size,
         )
+        del trainer, model
+        torch.cuda.empty_cache()
         return model_name, results
     else:
         train_loader = build_dataloader(
@@ -158,6 +161,8 @@ def train_one(config_path: str, device: str = None, fold: int = None, resume: st
         print(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
         best = trainer.fit(train_loader, val_loader, fold=fold)
         print(f"Best checkpoint: {best.get('checkpoint_path', 'N/A')}")
+        del trainer, model
+        torch.cuda.empty_cache()
         return model_name, best
 
 
@@ -191,6 +196,9 @@ def main():
             except Exception as e:
                 print(f"\n[ERROR] {cfg_path.stem} failed: {e}")
                 summary[cfg_path.stem] = {"status": "error", "error": str(e)}
+            finally:
+                gc.collect()
+                torch.cuda.empty_cache()
 
         print("\n" + "=" * 60)
         print("ALL-MODELS TRAINING SUMMARY")

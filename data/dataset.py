@@ -93,9 +93,13 @@ class MicroPlasticsDataset(Dataset):
             masks.append(mask)
             labels.append(ann["category_id"])
 
-            # Bounding box from COCO [x, y, w, h]
+            # Bounding box from COCO [x, y, w, h] — clip to image bounds
             x, y, w, h = ann["bbox"]
-            boxes.append([x, y, x + w, y + h])
+            x1 = max(0.0, x)
+            y1 = max(0.0, y)
+            x2 = min(float(W), x + w)
+            y2 = min(float(H), y + h)
+            boxes.append([x1, y1, x2, y2])
 
         # Apply transforms (albumentations format)
         if self.transforms is not None:

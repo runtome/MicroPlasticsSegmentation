@@ -88,6 +88,18 @@ class EfficientSAMWrapper(BaseModel):
                 if input_points is not None else None,
             )
         elif self._use_hf_sam:
+            # HF SAM requires 1024×1024 input; resize and scale boxes accordingly
+            orig_h, orig_w = pixel_values.shape[-2:]
+            if (orig_h, orig_w) != (1024, 1024):
+                pixel_values = F.interpolate(
+                    pixel_values, size=(1024, 1024), mode="bilinear", align_corners=False
+                )
+                if input_boxes is not None:
+                    scale_w = 1024.0 / orig_w
+                    scale_h = 1024.0 / orig_h
+                    input_boxes = input_boxes.clone().float()
+                    input_boxes[..., [0, 2]] *= scale_w
+                    input_boxes[..., [1, 3]] *= scale_h
             return self.model(
                 pixel_values=pixel_values,
                 input_boxes=input_boxes,

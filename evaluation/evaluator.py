@@ -147,13 +147,14 @@ class Evaluator:
         params = self.model.count_parameters() if hasattr(self.model, "count_parameters") else 0
         avg_inference_ms = float(np.mean(inference_times)) if inference_times else 0.0
 
+        cls_names = {1: "Fiber", 2: "Fragment", 3: "Film"}
         return {
             "iou_per_class": iou_per_class,
             "mIoU": float(np.mean(iou_list)) if iou_list else float(np.mean(list(iou_per_class.values()))),
             "mAP50": map50.get("mAP", 0.0),
             "mAP75": map75.get("mAP", 0.0),
             "AP_per_class_50": {c: map50.get(f"AP_{c}", 0.0) for c in [1, 2, 3]},
-            **{f"F1_{c}": f1_metrics.get(f"F1_{c}", 0.0) for c in [1, 2, 3]},
+            **{f"F1_{cls_names[c]}": f1_metrics.get(f"F1_{c}", 0.0) for c in [1, 2, 3]},
             "F1_macro": f1_metrics.get("F1_macro", 0.0),
             "params": params,
             "inference_time_ms": avg_inference_ms,

@@ -18,9 +18,9 @@ METRIC_COLS = [
     "mAP50",
     "mAP75",
     "F1_macro",
-    "F1_1",
-    "F1_2",
-    "F1_3",
+    "F1_Fiber",
+    "F1_Fragment",
+    "F1_Film",
     "params_M",
     "inference_time_ms",
 ]
@@ -44,19 +44,23 @@ class ModelComparison:
             model_name: display name for the model
             metrics: dict from Evaluator.evaluate()
         """
+        # iou_per_class keys may be int (from evaluator) or str (after JSON round-trip)
         iou_per_class = metrics.get("iou_per_class", {})
+        def _iou(cls_id):
+            return float(iou_per_class.get(cls_id, iou_per_class.get(str(cls_id), 0.0)))
+
         record = {
             "model": model_name,
             "mIoU": round(metrics.get("mIoU", 0.0), 4),
-            "IoU_Fiber": round(iou_per_class.get(1, 0.0), 4),
-            "IoU_Fragment": round(iou_per_class.get(2, 0.0), 4),
-            "IoU_Film": round(iou_per_class.get(3, 0.0), 4),
+            "IoU_Fiber": round(_iou(1), 4),
+            "IoU_Fragment": round(_iou(2), 4),
+            "IoU_Film": round(_iou(3), 4),
             "mAP50": round(metrics.get("mAP50", 0.0), 4),
             "mAP75": round(metrics.get("mAP75", 0.0), 4),
             "F1_macro": round(metrics.get("F1_macro", 0.0), 4),
-            "F1_1": round(metrics.get("F1_1", 0.0), 4),
-            "F1_2": round(metrics.get("F1_2", 0.0), 4),
-            "F1_3": round(metrics.get("F1_3", 0.0), 4),
+            "F1_Fiber": round(metrics.get("F1_Fiber", 0.0), 4),
+            "F1_Fragment": round(metrics.get("F1_Fragment", 0.0), 4),
+            "F1_Film": round(metrics.get("F1_Film", 0.0), 4),
             "params_M": round(metrics.get("params", 0) / 1e6, 2),
             "inference_time_ms": round(metrics.get("inference_time_ms", 0.0), 2),
         }

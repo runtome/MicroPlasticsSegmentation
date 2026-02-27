@@ -16,3 +16,4 @@ pyyaml>=6.0.1
 tqdm>=4.66.0
 timm>=0.9.16
 einops>=0.7.0
+segmentation-models-pytorch>=0.3.3

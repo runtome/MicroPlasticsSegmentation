@@ -91,7 +91,7 @@ def main():
     parser.add_argument("--model", required=True,
                         help="Model name (unet, attention_unet, mask_rcnn, etc.)")
     parser.add_argument("--checkpoint", required=True, help="Path to checkpoint .pth")
-    parser.add_argument("--input", required=True, help="Input image path or directory")
+    parser.add_argument("--input", default=None, help="Input image path or directory (required when --split is not used)")
     parser.add_argument("--output", default="outputs/predictions/",
                         help="Output directory for visualizations")
     parser.add_argument("--config", default=None,
@@ -103,6 +103,9 @@ def main():
         help="Run on a full data split with GT comparison (saves side-by-side images)",
     )
     args = parser.parse_args()
+
+    if not args.split and not args.input:
+        parser.error("--input is required when --split is not specified")
 
     # Load config
     config_path = args.config or f"configs/{args.model}.yaml"

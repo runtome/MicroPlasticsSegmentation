@@ -229,6 +229,7 @@ class Trainer:
 
             # Reset model weights for each fold
             self.model.reset_weights()
+            self.model.to(self.device)  # re-move after reset (smp mode re-creates submodules on CPU)
             self.optimizer = self._build_optimizer()
             self.scheduler = None
             self.early_stopping.counter = 0

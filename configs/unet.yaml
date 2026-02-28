@@ -3,7 +3,7 @@ defaults:
 
 model:
   name: unet
-  encoder: mobilenet_v2   # smp encoder name — set to null for custom scratch build
+  encoder: efficientnet-b0   # smp encoder name — set to null for custom scratch build
   pretrained: true         # true = ImageNet weights via smp; false = random init
   in_channels: 3
   num_classes: 3

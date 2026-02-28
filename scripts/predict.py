@@ -113,10 +113,16 @@ def main():
     config = load_config(config_path)
     device = args.device or config.get("training", {}).get("device", "cuda")
 
+    # Resolve checkpoint path (same logic as evaluate.py)
+    import torch
+    from scripts.evaluate import resolve_checkpoint
+    model_name = config.get("model", {}).get("name", args.model)
+    ckpt_path = resolve_checkpoint(args.checkpoint, model_name, config)
+    print(f"Loading checkpoint: {ckpt_path}")
+
     # Build model and load checkpoint
     model = get_model(config)
-    import torch
-    state = torch.load(args.checkpoint, map_location=device)
+    state = torch.load(ckpt_path, map_location=device)
     if "model_state_dict" in state:
         model.load_state_dict(state["model_state_dict"])
     else:

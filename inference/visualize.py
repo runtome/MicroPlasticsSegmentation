@@ -150,6 +150,68 @@ def visualize_predictions(
     return vis
 
 
+def visualize_gt(
+    image: np.ndarray,
+    masks,
+    labels,
+    alpha: float = 0.4,
+) -> np.ndarray:
+    """
+    Visualize ground-truth instance masks on an image.
+
+    Args:
+        image : (H, W, 3) uint8 RGB
+        masks : (N, H, W) binary, numpy or torch.Tensor
+        labels: (N,) int class ids (1=Fiber, 2=Fragment, 3=Film), numpy or torch.Tensor
+    """
+    if image is None:
+        return np.zeros((640, 640, 3), dtype=np.uint8)
+    vis = image.copy().astype(np.uint8)
+    if isinstance(masks, torch.Tensor):
+        masks = masks.numpy()
+    if isinstance(labels, torch.Tensor):
+        labels = labels.numpy()
+
+    for i in range(len(masks)):
+        mask = masks[i]
+        if mask.sum() == 0:
+            continue
+        cls_id = int(labels[i])
+        color = CLASS_COLORS.get(cls_id, (255, 255, 0))
+        vis = draw_mask(vis, mask, color, alpha)
+        vis = draw_contour(vis, mask, color)
+        label_text = CLASS_NAMES.get(cls_id, f"Class {cls_id}")
+        ys, xs = np.where(mask > 0)
+        if len(xs) > 0:
+            cx, cy = int(xs.mean()), int(ys.mean())
+            cv2.putText(vis, label_text, (cx, cy),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    return vis
+
+
+def make_side_by_side(
+    left: np.ndarray,
+    right: np.ndarray,
+    left_title: str = "GT",
+    right_title: str = "Pred",
+    title_height: int = 28,
+) -> np.ndarray:
+    """
+    Concatenate two RGB images horizontally with title bars.
+    Both images must have the same height.
+    """
+    H, W = left.shape[:2]
+    bar_color = (30, 30, 30)
+
+    def _add_title(img: np.ndarray, title: str) -> np.ndarray:
+        bar = np.full((title_height, W, 3), bar_color, dtype=np.uint8)
+        cv2.putText(bar, title, (8, title_height - 7),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+        return np.vstack([bar, img])
+
+    return np.hstack([_add_title(left, left_title), _add_title(right, right_title)])
+
+
 def save_visualization(
     image: np.ndarray,
     prediction: Dict[str, Any],

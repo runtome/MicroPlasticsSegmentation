@@ -14,6 +14,78 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import yaml
 
 
+def _predict_split(predictor, config, args):
+    """
+    Run inference on a full data split and save side-by-side GT vs prediction images.
+    Each saved image: [GT masks + labels | Predicted mask + class]
+    """
+    import json
+    import numpy as np
+    import torch
+    import cv2
+    from data.dataset import MicroPlasticsDataset
+    from data.transforms import get_val_transforms
+    from inference.visualize import visualize_gt, visualize_predictions, make_side_by_side
+
+    data_cfg = config["data"]
+    image_size = data_cfg.get("image_size", 640)
+
+    with open(data_cfg["splits_file"]) as f:
+        splits = json.load(f)
+    file_names = splits.get(args.split, [])
+    if not file_names:
+        print(f"No images found for split '{args.split}' in {data_cfg['splits_file']}")
+        return
+
+    dataset = MicroPlasticsDataset(
+        images_dir=data_cfg["images_dir"],
+        annotation_path=data_cfg["annotation"],
+        file_names=file_names,
+        transforms=get_val_transforms(image_size),
+        image_size=image_size,
+    )
+
+    output_dir = Path(args.output) / args.split
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Running inference on '{args.split}' split: {len(dataset)} images → {output_dir}")
+
+    # ImageNet denorm constants
+    _mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    _std  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+    for item in dataset:
+        img_tensor  = item["image"].to(predictor.device)   # (C, H, W) normalized
+        gt_masks    = item["masks"].numpy()                # (N, H, W)
+        gt_labels   = item["labels"].numpy()               # (N,)
+        file_name   = item["file_name"]
+
+        # Denormalize tensor → uint8 RGB for visualization
+        img_vis = img_tensor.cpu().numpy().transpose(1, 2, 0)
+        img_vis = (img_vis * _std + _mean).clip(0.0, 1.0)
+        img_vis = (img_vis * 255).astype(np.uint8)
+
+        # Predict
+        with torch.no_grad():
+            pred = predictor.model.predict(img_tensor, threshold=args.threshold)
+
+        # Build GT and prediction panels, then join side-by-side
+        n_inst = len(gt_labels)
+        gt_title   = f"GT  ({n_inst} instance{'s' if n_inst != 1 else ''})"
+        pred_title = "Pred"
+        if "predicted_class" in pred:
+            from inference.predictor import CLASS_NAMES
+            pred_title = f"Pred  {CLASS_NAMES.get(pred['predicted_class'], pred['predicted_class'])}"
+
+        gt_panel   = visualize_gt(img_vis, gt_masks, gt_labels)
+        pred_panel = visualize_predictions(img_vis.copy(), pred)
+        canvas     = make_side_by_side(gt_panel, pred_panel, gt_title, pred_title)
+
+        out_path = output_dir / Path(file_name).name
+        cv2.imwrite(str(out_path), cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR))
+
+    print(f"Saved {len(dataset)} side-by-side images to {output_dir}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run inference on images")
     parser.add_argument("--model", required=True,
@@ -26,6 +98,10 @@ def main():
                         help="Config YAML (default: configs/{model}.yaml)")
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--device", default=None)
+    parser.add_argument(
+        "--split", default=None, choices=["train", "val", "test"],
+        help="Run on a full data split with GT comparison (saves side-by-side images)",
+    )
     args = parser.parse_args()
 
     # Load config
@@ -47,6 +123,11 @@ def main():
 
     from inference.predictor import Predictor
     predictor = Predictor(model, image_size=image_size, device=device)
+
+    # --- Split mode: run on full train/val/test with GT side-by-side ---
+    if args.split:
+        _predict_split(predictor, config, args)
+        return
 
     input_path = Path(args.input)
     output_dir = Path(args.output)

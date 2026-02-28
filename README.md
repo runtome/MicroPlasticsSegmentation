@@ -189,11 +189,64 @@ python scripts/compare_models.py --output outputs/results/comparison.csv
 ### Step 6 — Run inference on new images
 
 ```bash
+# Single image
+python scripts/predict.py \
+    --model unet \
+    --checkpoint outputs/checkpoints/unet_best.pth \
+    --input path/to/image.jpg
+
+# Whole directory
 python scripts/predict.py \
     --model unet \
     --checkpoint outputs/checkpoints/unet_best.pth \
     --input path/to/images/
 ```
+
+### Step 7 — Visualise predictions vs ground truth on a data split
+
+Use `--split` to run inference over the full `test`, `val`, or `train` set and save **side-by-side GT / prediction** images.
+
+```bash
+# Test set (recommended for final inspection)
+python scripts/predict.py \
+    --model unet \
+    --checkpoint best \
+    --split test
+
+# Validation set
+python scripts/predict.py \
+    --model unet \
+    --checkpoint best \
+    --split val
+
+# Training set, custom output dir and threshold
+python scripts/predict.py \
+    --model unet \
+    --checkpoint best \
+    --split train \
+    --output outputs/predictions/ \
+    --threshold 0.4
+```
+
+`--checkpoint best` auto-selects the highest-scoring checkpoint from `outputs/checkpoints/<model>/`.
+
+Output images are saved to `outputs/predictions/{split}/` (one file per input image):
+
+```
+┌──────────────────────────────┬──────────────────────────────┐
+│  GT  (N instances)           │  Pred  Fiber                 │
+├──────────────────────────────┼──────────────────────────────┤
+│  GT masks + class labels     │  Predicted mask + class      │
+└──────────────────────────────┴──────────────────────────────┘
+```
+
+**Color coding** (same on both panels):
+
+| Color | Class |
+|-------|-------|
+| Red | Fiber |
+| Green | Fragment |
+| Blue | Film |
 
 ---
 

@@ -234,6 +234,9 @@ class Trainer:
             self.scheduler = None
             self.early_stopping.counter = 0
             self.early_stopping.should_stop = False
+            self.early_stopping.best_value = float("inf") if self.early_stopping.mode == "min" else float("-inf")
+            self.checkpoint.best_value = float("-inf") if self.checkpoint.mode == "max" else float("inf")
+            self.checkpoint.best_path = None
 
             train_loader = build_dataloader(
                 "train", images_dir, annotation_path, splits_file,

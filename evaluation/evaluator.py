@@ -56,6 +56,10 @@ class Evaluator:
         all_gt_masks = []
         all_gt_labels = []
 
+        # Per-image class sets for image-level multi-label F1
+        all_pred_cls_sets = []
+        all_gt_cls_sets = []
+
         iou_list = []
         inference_times = []
 
@@ -94,6 +98,19 @@ class Evaluator:
                         continue
                 else:
                     continue
+
+                # Image-level class sets for multi-label F1
+                # Use cls_probs (thresholded) when available; else fall back to predicted_class
+                if "cls_probs" in pred:
+                    cls_probs_np = pred["cls_probs"].numpy()
+                    pred_cls = set((np.where(cls_probs_np > 0.5)[0] + 1).tolist())
+                    if not pred_cls:  # nothing above threshold → take argmax
+                        pred_cls = {int(cls_probs_np.argmax()) + 1}
+                else:
+                    pred_cls = {int(plabels[0])} if len(plabels) > 0 else set()
+                gt_cls = set(gt_l.numpy().astype(int).tolist()) if gt_l.shape[0] > 0 else set()
+                all_pred_cls_sets.append(pred_cls)
+                all_gt_cls_sets.append(gt_cls)
 
                 all_pred_masks.append(pmasks)
                 all_pred_scores.append(pscores)
@@ -134,15 +151,21 @@ class Evaluator:
                     cls_ious.append(best_iou)
             iou_per_class[cls_id] = float(np.mean(cls_ious)) if cls_ious else 0.0
 
-        # F1 (classification accuracy)
-        all_pred_labels_flat = np.concatenate(all_pred_labels) if all_pred_labels else np.array([])
-        all_gt_labels_flat = np.concatenate(all_gt_labels) if all_gt_labels else np.array([])
-        # Match by limiting to min length (rough approximation for classification F1)
-        n = min(len(all_pred_labels_flat), len(all_gt_labels_flat))
-        f1_metrics = compute_f1(
-            all_pred_labels_flat[:n],
-            all_gt_labels_flat[:n],
-        ) if n > 0 else {"F1_macro": 0.0}
+        # F1: image-level multi-label classification
+        # For each image, cls_probs > 0.5 gives the predicted class set;
+        # GT class set is the unique set of instance labels in that image.
+        f1_metrics = {}
+        f1_scores = []
+        for c in [1, 2, 3]:
+            tp = sum(c in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
+            fp = sum(c in ps and c not in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
+            fn = sum(c not in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
+            prec = tp / (tp + fp + 1e-6)
+            rec = tp / (tp + fn + 1e-6)
+            f1 = 2 * prec * rec / (prec + rec + 1e-6)
+            f1_metrics[f"F1_{c}"] = float(f1)
+            f1_scores.append(f1)
+        f1_metrics["F1_macro"] = float(np.mean(f1_scores))
 
         params = self.model.count_parameters() if hasattr(self.model, "count_parameters") else 0
         avg_inference_ms = float(np.mean(inference_times)) if inference_times else 0.0

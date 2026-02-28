@@ -135,17 +135,17 @@ def build_splits(
     val_files = expand_to_files(val_names)
     test_files = expand_to_files(test_names)
 
-    # 5-fold CV on train set (base-level stratified)
-    train_bases = np.array(train_names)
-    train_base_labels = np.array([
-        base_labels[np.where(base_names == b)[0][0]] for b in train_bases
+    # 5-fold CV on train+val set combined (base-level stratified)
+    trainval_bases = np.array(train_names + val_names)
+    trainval_base_labels = np.array([
+        base_labels[np.where(base_names == b)[0][0]] for b in trainval_bases
     ])
 
     skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=seed)
     folds = []
-    for fold_train_idx, fold_val_idx in skf.split(train_bases, train_base_labels):
-        fold_train_files = expand_to_files(train_bases[fold_train_idx].tolist())
-        fold_val_files = expand_to_files(train_bases[fold_val_idx].tolist())
+    for fold_train_idx, fold_val_idx in skf.split(trainval_bases, trainval_base_labels):
+        fold_train_files = expand_to_files(trainval_bases[fold_train_idx].tolist())
+        fold_val_files = expand_to_files(trainval_bases[fold_val_idx].tolist())
         folds.append({"train": fold_train_files, "val": fold_val_files})
 
     splits = {
@@ -171,6 +171,6 @@ def build_splits(
     print(f"  Train: {len(train_files)} images ({len(train_names)} groups)")
     print(f"  Val:   {len(val_files)} images ({len(val_names)} groups)")
     print(f"  Test:  {len(test_files)} images ({len(test_names)} groups)")
-    print(f"  5-fold CV folds built on train set")
+    print(f"  5-fold CV folds built on train+val set")
 
     return splits

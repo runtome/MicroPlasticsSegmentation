@@ -1,6 +1,7 @@
 images/
 referance/
 annotation.json
+paper_figures/
 
 # Python
 __pycache__/

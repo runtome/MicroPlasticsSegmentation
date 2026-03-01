@@ -156,6 +156,8 @@ class Evaluator:
         # GT class set is the unique set of instance labels in that image.
         f1_metrics = {}
         f1_scores = []
+        prec_scores = []
+        rec_scores = []
         for c in [1, 2, 3]:
             tp = sum(c in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
             fp = sum(c in ps and c not in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
@@ -164,8 +166,37 @@ class Evaluator:
             rec = tp / (tp + fn + 1e-6)
             f1 = 2 * prec * rec / (prec + rec + 1e-6)
             f1_metrics[f"F1_{c}"] = float(f1)
+            f1_metrics[f"Precision_{c}"] = float(prec)
+            f1_metrics[f"Recall_{c}"] = float(rec)
             f1_scores.append(f1)
+            prec_scores.append(prec)
+            rec_scores.append(rec)
         f1_metrics["F1_macro"] = float(np.mean(f1_scores))
+        f1_metrics["Precision_macro"] = float(np.mean(prec_scores))
+        f1_metrics["Recall_macro"] = float(np.mean(rec_scores))
+
+        # Instance-level confusion matrix (IoU ≥ 0.5 matching)
+        conf_matrix = np.zeros((3, 3), dtype=int)
+        for pmasks, plabels, gmasks, glabels in zip(
+            all_pred_masks, all_pred_labels, all_gt_masks, all_gt_labels
+        ):
+            if len(gmasks) == 0 or len(pmasks) == 0:
+                continue
+            gt_used = np.zeros(len(gmasks), dtype=bool)
+            for pm, pl in zip(pmasks, plabels):
+                best_iou, best_j = 0.0, -1
+                for j, gm in enumerate(gmasks):
+                    if gt_used[j]:
+                        continue
+                    iou = compute_iou(pm, gm)
+                    if iou > best_iou:
+                        best_iou, best_j = iou, j
+                if best_iou >= 0.5 and best_j >= 0:
+                    gt_c = int(glabels[best_j]) - 1
+                    pred_c = int(pl) - 1
+                    if 0 <= gt_c < 3 and 0 <= pred_c < 3:
+                        conf_matrix[gt_c][pred_c] += 1
+                    gt_used[best_j] = True
 
         params = self.model.count_parameters() if hasattr(self.model, "count_parameters") else 0
         avg_inference_ms = float(np.mean(inference_times)) if inference_times else 0.0
@@ -179,6 +210,11 @@ class Evaluator:
             "AP_per_class_50": {c: map50.get(f"AP_{c}", 0.0) for c in [1, 2, 3]},
             **{f"F1_{cls_names[c]}": f1_metrics.get(f"F1_{c}", 0.0) for c in [1, 2, 3]},
             "F1_macro": f1_metrics.get("F1_macro", 0.0),
+            **{f"Precision_{cls_names[c]}": f1_metrics.get(f"Precision_{c}", 0.0) for c in [1, 2, 3]},
+            "Precision_macro": f1_metrics.get("Precision_macro", 0.0),
+            **{f"Recall_{cls_names[c]}": f1_metrics.get(f"Recall_{c}", 0.0) for c in [1, 2, 3]},
+            "Recall_macro": f1_metrics.get("Recall_macro", 0.0),
+            "confusion_matrix": conf_matrix.tolist(),
             "params": params,
             "inference_time_ms": avg_inference_ms,
         }

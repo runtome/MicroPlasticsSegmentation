@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import numpy as np
 import torch
 import yaml
 
@@ -101,6 +102,46 @@ def _checkpoint_not_found(p: Path, default_dir: Path):
     raise FileNotFoundError(msg)
 
 
+def _save_confusion_matrix(cm: np.ndarray, model_name: str, output_dir: Path) -> Path:
+    """Save confusion matrix as a PNG heatmap."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    cls_names = ["Fiber", "Fragment", "Film"]
+    row_sums = cm.sum(axis=1, keepdims=True)
+    cm_norm = cm.astype(float) / np.where(row_sums == 0, 1, row_sums)
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(cm_norm, interpolation="nearest", cmap="Blues", vmin=0, vmax=1)
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+    ax.set_xticks(range(3))
+    ax.set_yticks(range(3))
+    ax.set_xticklabels(cls_names)
+    ax.set_yticklabels(cls_names)
+    ax.set_xlabel("Predicted Class")
+    ax.set_ylabel("True Class")
+    ax.set_title(f"Confusion Matrix — {model_name}")
+
+    thresh = 0.5
+    for i in range(3):
+        for j in range(3):
+            ax.text(
+                j, i,
+                f"{cm[i, j]}\n({cm_norm[i, j]:.1%})",
+                ha="center", va="center", fontsize=10,
+                color="white" if cm_norm[i, j] > thresh else "black",
+            )
+
+    plt.tight_layout()
+    out_path = output_dir / f"{model_name}_confusion_matrix.png"
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Confusion matrix saved to: {out_path}")
+    return out_path
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a trained model")
     parser.add_argument("--config", required=True, help="Path to config YAML")
@@ -163,17 +204,43 @@ def main():
     print(f"  IoU Film:        {_iou(3):.4f}")
     print(f"  mAP50:           {metrics['mAP50']:.4f}")
     print(f"  mAP75:           {metrics['mAP75']:.4f}")
-    print(f"  F1 macro:        {metrics['F1_macro']:.4f}")
-    print(f"  F1 Fiber:        {metrics.get('F1_Fiber', 0.0):.4f}")
-    print(f"  F1 Fragment:     {metrics.get('F1_Fragment', 0.0):.4f}")
-    print(f"  F1 Film:         {metrics.get('F1_Film', 0.0):.4f}")
+    print()
+    # Per-class F1 / Precision / Recall table
+    cls_names = ["Fiber", "Fragment", "Film"]
+    print(f"  {'Class':<12} {'Precision':>10} {'Recall':>10} {'F1':>10}")
+    print(f"  {'-'*44}")
+    for cls in cls_names:
+        p = metrics.get(f"Precision_{cls}", 0.0)
+        r = metrics.get(f"Recall_{cls}", 0.0)
+        f = metrics.get(f"F1_{cls}", 0.0)
+        print(f"  {cls:<12} {p:>10.4f} {r:>10.4f} {f:>10.4f}")
+    print(f"  {'-'*44}")
+    print(f"  {'Macro':<12} {metrics.get('Precision_macro', 0.0):>10.4f}"
+          f" {metrics.get('Recall_macro', 0.0):>10.4f}"
+          f" {metrics.get('F1_macro', 0.0):>10.4f}")
+    print()
     print(f"  Params:          {metrics['params']:,}")
     print(f"  Inference (ms):  {metrics['inference_time_ms']:.1f}")
     print(f"{'=' * 60}")
 
-    # Save results
-    output_path = args.output or f"outputs/results/{model_name}_results.json"
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    # Print confusion matrix
+    cm = np.array(metrics.get("confusion_matrix", [[0]*3]*3))
+    print(f"\nConfusion Matrix (rows=GT, cols=Predicted, IoU≥0.5 matched instances):")
+    header = f"  {'':>12}" + "".join(f"{n:>12}" for n in cls_names)
+    print(header)
+    print(f"  {'-' * (12 + 12*3)}")
+    for i, row_name in enumerate(cls_names):
+        row_str = "".join(f"{cm[i, j]:>12}" for j in range(3))
+        print(f"  {row_name:<12}{row_str}")
+    print()
+
+    # Save confusion matrix image
+    results_dir = Path(args.output).parent if args.output else Path("outputs/results")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    _save_confusion_matrix(cm, model_name, results_dir)
+
+    # Save results JSON
+    output_path = args.output or str(results_dir / f"{model_name}_results.json")
     with open(output_path, "w") as f:
         json.dump(metrics, f, indent=2, default=lambda x: float(x) if hasattr(x, '__float__') else str(x))
     print(f"Results saved to: {output_path}")

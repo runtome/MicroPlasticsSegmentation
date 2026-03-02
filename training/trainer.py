@@ -53,12 +53,12 @@ class Trainer:
         log_dir = output_cfg.get("log_dir", f"outputs/logs/{self.model_name}/")
 
         es_cfg = cb_cfg.get("early_stopping", {})
+        self.es_monitor = es_cfg.get("monitor", "val_miou")
         self.early_stopping = EarlyStopping(
             patience=es_cfg.get("patience", 10),
-            mode="min" if "loss" in es_cfg.get("monitor", "val_loss") else "max",
+            mode="min" if "loss" in self.es_monitor else "max",
             verbose=True,
         )
-        self.es_monitor = es_cfg.get("monitor", "val_loss")
 
         ckpt_cfg = cb_cfg.get("checkpoint", {})
         self.checkpoint = ModelCheckpoint(

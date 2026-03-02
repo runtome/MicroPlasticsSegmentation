@@ -159,9 +159,13 @@ def _build_annotations_for_image(
     annotations = []
     ann_id = ann_id_start
 
-    # Scale factors: from model space (model_size × model_size) → original image space
-    sx = orig_w / model_size
-    sy = orig_h / model_size
+    # Scale factors: from model space → original image space.
+    # The data pipeline uses LongestMaxSize(model_size) + PadIfNeeded(model_size),
+    # which preserves aspect ratio and pads to square.  Both axes share the
+    # same scale factor (the inverse of the resize ratio).
+    resize_scale = model_size / max(orig_h, orig_w)
+    sx = 1.0 / resize_scale
+    sy = 1.0 / resize_scale
 
     # ── Case 1: per-instance masks (Mask R-CNN style) ─────────────────────
     if "masks" in pred and len(pred["masks"]) > 0:

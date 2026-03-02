@@ -1,6 +1,6 @@
 data:
-  images_dir: /kaggle/input/microplasticssegmentation/images/
-  annotation: /kaggle/input/microplasticssegmentation/annotation.json
+  images_dir: images/
+  annotation: annotation.json
   splits_file: data_splits/splits.json
   image_size: 640
   num_classes: 3

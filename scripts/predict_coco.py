@@ -156,6 +156,7 @@ def _build_annotations_for_image(
 
     Returns list of annotation dicts ready for COCO JSON.
     """
+
     annotations = []
     ann_id = ann_id_start
 
@@ -167,7 +168,32 @@ def _build_annotations_for_image(
     sx = 1.0 / resize_scale
     sy = 1.0 / resize_scale
 
-    # ── Case 1: per-instance masks (Mask R-CNN style) ─────────────────────
+    # ---- compute resized shape BEFORE padding ----
+    resized_h = int(round(orig_h * resize_scale))
+    resized_w = int(round(orig_w * resize_scale))
+
+    # ---- compute padding applied in model space ----
+    pad_x = (model_size - resized_w) / 2.0
+    pad_y = (model_size - resized_h) / 2.0
+
+    # ---- helpers ----
+    def remove_padding_from_polygon(polygons):
+        fixed = []
+        for poly in polygons:
+            new_poly = []
+            for i in range(0, len(poly), 2):
+                x = poly[i]   - pad_x
+                y = poly[i+1] - pad_y
+                new_poly.extend([x, y])
+            fixed.append(new_poly)
+        return fixed
+
+    def remove_padding_from_bbox(x, y, w, h):
+        return x - pad_x, y - pad_y, w, h
+
+    # ────────────────────────────────────────────────
+    # Case 1: per-instance masks (Mask R-CNN style)
+    # ────────────────────────────────────────────────
     if "masks" in pred and len(pred["masks"]) > 0:
         masks  = pred["masks"]   # (N, H, W) numpy or tensor
         labels = pred.get("labels", [])
@@ -180,9 +206,12 @@ def _build_annotations_for_image(
 
         for i, inst_mask in enumerate(masks):
             inst_mask = (inst_mask > 0).astype(np.uint8)
+
             polygons = _mask_to_polygon(inst_mask)
             if not polygons:
                 continue
+
+            polygons = remove_padding_from_polygon(polygons)
             polygons = _scale_polygon(polygons, sx, sy)
             area = _polygon_area(polygons)
 
@@ -191,11 +220,14 @@ def _build_annotations_for_image(
             cols = np.any(inst_mask, axis=0)
             if not rows.any():
                 continue
+
             rmin, rmax = np.where(rows)[0][[0, -1]]
             cmin, cmax = np.where(cols)[0][[0, -1]]
-            bbox = _scale_bbox(
-                cmin, rmin, cmax - cmin + 1, rmax - rmin + 1, sx, sy
+
+            x, y, w, h = remove_padding_from_bbox(
+                cmin, rmin, cmax - cmin + 1, rmax - rmin + 1
             )
+            bbox = _scale_bbox(x, y, w, h, sx, sy)
 
             cat_id = int(labels[i]) if i < len(labels) else 1
             score  = float(scores[i]) if i < len(scores) else None
@@ -211,10 +243,13 @@ def _build_annotations_for_image(
             }
             if score is not None:
                 ann["score"] = round(score, 4)
+
             annotations.append(ann)
             ann_id += 1
 
-    # ── Case 2: single binary mask (U-Net / dual-head style) ──────────────
+    # ────────────────────────────────────────────────
+    # Case 2: single binary mask (U-Net style)
+    # ────────────────────────────────────────────────
     elif "mask" in pred:
         mask = pred["mask"]
         if isinstance(mask, torch.Tensor):
@@ -228,13 +263,17 @@ def _build_annotations_for_image(
             polygons = _mask_to_polygon(inst_mask)
             if not polygons:
                 continue
+
+            polygons = remove_padding_from_polygon(polygons)
             polygons = _scale_polygon(polygons, sx, sy)
             area = _polygon_area(polygons)
 
-            x  = int(stats[cv2.CC_STAT_LEFT])
-            y  = int(stats[cv2.CC_STAT_TOP])
-            w  = int(stats[cv2.CC_STAT_WIDTH])
-            h  = int(stats[cv2.CC_STAT_HEIGHT])
+            x = int(stats[cv2.CC_STAT_LEFT])
+            y = int(stats[cv2.CC_STAT_TOP])
+            w = int(stats[cv2.CC_STAT_WIDTH])
+            h = int(stats[cv2.CC_STAT_HEIGHT])
+
+            x, y, w, h = remove_padding_from_bbox(x, y, w, h)
             bbox = _scale_bbox(x, y, w, h, sx, sy)
 
             ann = {
@@ -246,6 +285,7 @@ def _build_annotations_for_image(
                 "segmentation": polygons,
                 "bbox": bbox,
             }
+
             annotations.append(ann)
             ann_id += 1
 

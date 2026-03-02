@@ -37,7 +37,8 @@ class YOLO26Wrapper:
         self.num_classes = model_cfg.get("num_classes", 3)
         self.class_names = model_cfg.get("class_names", ["Fiber", "Fragment", "Film"])
 
-        weights = self.VARIANTS.get(variant, f"yolo11{variant}-seg.pt")
+        # Accept short key ("s","m","x") or full model name ("yolo26s-seg")
+        weights = self.VARIANTS.get(variant, f"{variant}.pt")
         self.model = YOLO(weights)  # auto-downloads if not present
         self._last_results = None
 
@@ -53,7 +54,7 @@ class YOLO26Wrapper:
         **kwargs,
     ) -> dict:
         """Run Ultralytics training loop."""
-        name = name or f"yolo11{self.variant}-seg"
+        name = name or self.variant
         results = self.model.train(
             data=data_yaml,
             epochs=epochs,
@@ -123,7 +124,7 @@ class YOLO26Wrapper:
 
         results = {}
         for v in variants:
-            print(f"\nTraining YOLO11{v}-seg...")
+            print(f"\nTraining {v}...")
             wrapper = cls(config, variant=v)
             train_cfg = config.get("training", {})
             result = wrapper.train(
@@ -133,6 +134,6 @@ class YOLO26Wrapper:
                 batch=train_cfg.get("batch_size", 16),
                 device=str(train_cfg.get("device", 0)),
             )
-            results[f"yolo11{v}-seg"] = result
+            results[v] = result
 
         return results

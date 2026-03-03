@@ -187,6 +187,29 @@ def main():
     )
     print(f"Evaluating on {args.split} set: {len(test_loader)} batches")
 
+    # Dataset statistics
+    ds = test_loader.dataset
+    class_ids = data_cfg.get("class_ids", [1, 2, 3])
+    class_names = data_cfg.get("class_names", ["Fiber", "Fragment", "Film"])
+    cls_names_map = dict(zip(class_ids, class_names))
+    cls_img_count = {cid: 0 for cid in class_ids}
+    for img_meta in ds.images:
+        anns = ds._ann_by_image.get(img_meta["id"], [])
+        cats_in_img = set(a["category_id"] for a in anns)
+        for c in cats_in_img:
+            if c in cls_img_count:
+                cls_img_count[c] += 1
+    total_imgs = len(ds)
+    print(f"\n{'=' * 60}")
+    print(f"Dataset statistics ({args.split} split, {total_imgs} images):")
+    print(f"{'=' * 60}")
+    print(f"  {'class_name':<14} {'images':>8} {'pct_of_imgs':>12}")
+    print(f"  {'-'*12:14} {'-'*8:>8} {'-'*12:>12}")
+    for cid in class_ids:
+        cnt = cls_img_count[cid]
+        pct = cnt / total_imgs * 100 if total_imgs > 0 else 0.0
+        print(f"  {cls_names_map[cid]:<14} {cnt:>8} {pct:>11.2f}%")
+
     # Evaluate
     from evaluation.evaluator import Evaluator
     evaluator = Evaluator(model, device=device)

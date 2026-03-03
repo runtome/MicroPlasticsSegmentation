@@ -248,7 +248,7 @@ def main():
 
     # Print confusion matrix
     cm = np.array(metrics.get("confusion_matrix", [[0]*3]*3))
-    print(f"\nConfusion Matrix (rows=GT, cols=Predicted, IoU≥0.5 matched instances):")
+    print(f"\nConfusion Matrix (rows=GT, cols=Predicted, image-level):")
     header = f"  {'':>12}" + "".join(f"{n:>12}" for n in cls_names)
     print(header)
     print(f"  {'-' * (12 + 12*3)}")

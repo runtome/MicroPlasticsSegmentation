@@ -175,28 +175,15 @@ class Evaluator:
         f1_metrics["Precision_macro"] = float(np.mean(prec_scores))
         f1_metrics["Recall_macro"] = float(np.mean(rec_scores))
 
-        # Instance-level confusion matrix (IoU ≥ 0.5 matching)
+        # Image-level confusion matrix (one GT class vs one predicted class per image)
         conf_matrix = np.zeros((3, 3), dtype=int)
-        for pmasks, plabels, gmasks, glabels in zip(
-            all_pred_masks, all_pred_labels, all_gt_masks, all_gt_labels
-        ):
-            if len(gmasks) == 0 or len(pmasks) == 0:
+        for gt_cls_set, pred_cls_set in zip(all_gt_cls_sets, all_pred_cls_sets):
+            if not gt_cls_set or not pred_cls_set:
                 continue
-            gt_used = np.zeros(len(gmasks), dtype=bool)
-            for pm, pl in zip(pmasks, plabels):
-                best_iou, best_j = 0.0, -1
-                for j, gm in enumerate(gmasks):
-                    if gt_used[j]:
-                        continue
-                    iou = compute_iou(pm, gm)
-                    if iou > best_iou:
-                        best_iou, best_j = iou, j
-                if best_iou >= 0.5 and best_j >= 0:
-                    gt_c = int(glabels[best_j]) - 1
-                    pred_c = int(pl) - 1
-                    if 0 <= gt_c < 3 and 0 <= pred_c < 3:
-                        conf_matrix[gt_c][pred_c] += 1
-                    gt_used[best_j] = True
+            gt_c = min(gt_cls_set) - 1       # single GT class per image
+            pred_c = min(pred_cls_set) - 1   # primary predicted class
+            if 0 <= gt_c < 3 and 0 <= pred_c < 3:
+                conf_matrix[gt_c][pred_c] += 1
 
         params = self.model.count_parameters() if hasattr(self.model, "count_parameters") else 0
         avg_inference_ms = float(np.mean(inference_times)) if inference_times else 0.0

@@ -167,10 +167,13 @@ class Trainer:
         """Run full training loop."""
         self.scheduler = self._build_scheduler()
         best_metrics = {}
+        fit_start = time.time()
+        total_epochs = 0
 
         for epoch in range(1, self.num_epochs + 1):
             train_metrics = self.train_epoch(train_loader, epoch, fold)
             val_metrics = self.val_epoch(val_loader, epoch, fold)
+            total_epochs += 1
 
             # Log epoch summary
             train_str = " | ".join(f"{k}={v:.4f}" for k, v in train_metrics.items())
@@ -189,6 +192,8 @@ class Trainer:
             if saved:
                 best_metrics = all_metrics.copy()
                 best_metrics["checkpoint_path"] = saved
+                # Reset early stopping counter when checkpoint improves
+                self.early_stopping.counter = 0
 
             # Early stopping
             monitor_val = all_metrics.get(
@@ -198,6 +203,14 @@ class Trainer:
             if self.early_stopping(monitor_val):
                 print(f"Early stopping at epoch {epoch}")
                 break
+
+        fit_time = time.time() - fit_start
+        avg_per_epoch = fit_time / total_epochs if total_epochs > 0 else 0.0
+        best_metrics["training_time_s"] = round(fit_time, 1)
+        best_metrics["avg_epoch_time_s"] = round(avg_per_epoch, 1)
+        best_metrics["total_epochs"] = total_epochs
+
+        print(f"\nTraining summary: {total_epochs} epochs in {fit_time:.1f}s (avg {avg_per_epoch:.1f}s/epoch)")
 
         if self.writer is not None:
             self.writer.close()
@@ -253,9 +266,28 @@ class Trainer:
             fold_results.append(result)
 
         # Summarize
-        print("\n5-Fold CV Results:")
-        for fold, res in enumerate(fold_results):
+        print(f"\n{'='*60}")
+        print("5-FOLD CV SUMMARY")
+        print(f"{'='*60}")
+        print(f"{'Fold':<6} {'val_miou':<12} {'Epochs':<8} {'Time(s)':<10} {'Avg/Epoch(s)':<14}")
+        print("-" * 50)
+        total_time = 0.0
+        mious = []
+        for fi, res in enumerate(fold_results):
             miou = res.get("val_miou", res.get("val_val_miou", "N/A"))
-            print(f"  Fold {fold+1}: val_miou={miou}")
+            epochs = res.get("total_epochs", "N/A")
+            t = res.get("training_time_s", 0.0)
+            avg_t = res.get("avg_epoch_time_s", 0.0)
+            total_time += t
+            if isinstance(miou, (int, float)):
+                mious.append(miou)
+                print(f"  {fi+1:<4} {miou:<12.4f} {epochs:<8} {t:<10.1f} {avg_t:<14.1f}")
+            else:
+                print(f"  {fi+1:<4} {miou:<12} {epochs:<8} {t:<10.1f} {avg_t:<14.1f}")
+        print("-" * 50)
+        if mious:
+            print(f"  Mean val_miou: {np.mean(mious):.4f} (+/- {np.std(mious):.4f})")
+        print(f"  Total training time: {total_time:.1f}s ({total_time/60:.1f}min)")
+        print(f"{'='*60}")
 
         return fold_results

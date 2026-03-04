@@ -210,8 +210,8 @@ Classes: `0=Fiber`, `1=Fragment`, `2=Film` (0-indexed internally; dataset uses 1
 ```yaml
 model:
   name: unet
-  encoder: resnet34   # smp encoder name — set to null for custom scratch build
-  pretrained: true    # true = ImageNet weights via smp; false = random init
+  encoder: efficientnet-b3   # smp encoder name — set to null for custom scratch build
+  pretrained: true            # true = ImageNet weights via smp; false = random init
   in_channels: 3
   num_classes: 3
   features: [64, 128, 256, 512]   # used only when encoder: null
@@ -225,11 +225,12 @@ model:
 encoder: null
 pretrained: false
 
-# Mode B — pretrained ResNet34 encoder
-encoder: resnet34
+# Mode B — pretrained EfficientNet-B3 encoder (current default)
+encoder: efficientnet-b3
 pretrained: true
 
 # Other supported smp encoders
+encoder: resnet34
 encoder: resnet50
 encoder: efficientnet-b4
 encoder: mobilenet_v2
@@ -350,12 +351,12 @@ No other code changes needed — `UNet._build_smp()` automatically reads the bot
 
 | Setting          | Value                                           |
 |------------------|-------------------------------------------------|
-| Optimizer        | Adam, lr=1e-3, wd=1e-4                          |
+| Optimizer        | AdamW, lr=3e-4, wd=1e-2                         |
 | Batch size       | 4                                               |
-| Max epochs       | 50                                              |
+| Max epochs       | 100                                             |
 | Cross-validation | 5-fold CV                                       |
-| LR scheduler     | ReduceLROnPlateau ×0.5 / patience=5 / min=1e-6  |
-| Early stopping   | patience=10, monitors val_loss                  |
+| LR scheduler     | CosineAnnealingLR (T_max=100, min_lr=1e-6)      |
+| Early stopping   | patience=15, monitors val_loss                  |
 | Checkpoint       | saves best val_miou → `outputs/checkpoints/unet/` |
 | Dropout          | 0.3 (bottleneck + cls head)                     |
 | Gradient clip    | max_norm=1.0                                    |
@@ -379,9 +380,9 @@ fit_kfold()                          # 5-fold CV
             │       → clip_grad_norm → optimizer.step
             ├── val_epoch()
             │   └── for batch: val_step (no_grad)
-            ├── ReduceLROnPlateau.step(val_loss)
+            ├── CosineAnnealingLR.step()
             ├── ModelCheckpoint (saves if val_miou improved)
-            └── EarlyStopping (breaks if val_loss stagnates 10 epochs)
+            └── EarlyStopping (breaks if val_loss stagnates 15 epochs)
 ```
 
 ---

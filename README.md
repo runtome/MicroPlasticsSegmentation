@@ -275,12 +275,15 @@ Model configs override only what differs:
 # configs/unet.yaml
 model:
   name: unet
+  encoder: efficientnet-b3
+  pretrained: true
   features: [64, 128, 256, 512]
 training:
-  optimizer: adam
-  lr: 1.0e-3
-  batch_size: 8
-  num_epochs: 50
+  optimizer: adamw
+  lr: 3.0e-4
+  weight_decay: 1.0e-2
+  batch_size: 4
+  num_epochs: 100
   use_5fold_cv: true
 ```
 

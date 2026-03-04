@@ -262,13 +262,13 @@ bottleneck: (B, 512, H, W)
 
 | Setting          | Value                                      |
 |------------------|--------------------------------------------|
-| Encoder          | resnet34 (ImageNet pretrained via smp)     |
-| Optimizer        | Adam, lr=1e-3, wd=1e-4                     |
+| Encoder          | efficientnet-b3 (ImageNet pretrained via smp) |
+| Optimizer        | AdamW, lr=3e-4, wd=1e-2                    |
 | Batch size       | 4                                          |
-| Max epochs       | 50                                         |
+| Max epochs       | 100                                        |
 | Cross-validation | 5-fold CV                                  |
-| LR scheduler     | ReduceLROnPlateau ×0.5 / patience=5        |
-| Early stopping   | patience=10, monitors val_loss             |
+| LR scheduler     | CosineAnnealingLR (T_max=100, min_lr=1e-6) |
+| Early stopping   | patience=15, monitors val_loss             |
 | Checkpoint       | saves best val_miou → `outputs/checkpoints/attention_unet/` |
 | Dropout          | 0.3                                        |
 | Gradient clip    | max_norm=1.0                               |

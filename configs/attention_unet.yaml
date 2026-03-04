@@ -3,7 +3,7 @@ defaults:
 
 model:
   name: attention_unet
-  encoder: resnet34
+  encoder: efficientnet-b0
   pretrained: true
   in_channels: 3
   num_classes: 3

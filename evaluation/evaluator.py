@@ -92,9 +92,22 @@ class Evaluator:
                         pscores = pred.get("scores", torch.ones(pmasks.shape[0])).numpy()
                         plabels = pred.get("labels", gt_l[:len(pmasks)]).numpy()
                     elif "mask" in pred:
-                        pmasks = pred["mask"].unsqueeze(0).numpy()
-                        pscores = np.array([1.0])
-                        plabels = np.array([pred.get("predicted_class", 1)])
+                        # Dual-head model: single binary mask + cls_probs
+                        # Replicate the mask for each class above threshold
+                        # so per-class IoU is computed correctly
+                        mask_np = pred["mask"].unsqueeze(0).numpy()  # (1, H, W)
+                        if "cls_probs" in pred:
+                            cls_probs_np = pred["cls_probs"].numpy()
+                            active = np.where(cls_probs_np > 0.5)[0]  # 0-indexed
+                            if len(active) == 0:
+                                active = [int(cls_probs_np.argmax())]
+                            pmasks = np.repeat(mask_np, len(active), axis=0)
+                            pscores = np.array([float(cls_probs_np[c]) for c in active])
+                            plabels = np.array([c + 1 for c in active])  # 1-indexed
+                        else:
+                            pmasks = mask_np
+                            pscores = np.array([1.0])
+                            plabels = np.array([pred.get("predicted_class", 1)])
                     else:
                         continue
                 else:

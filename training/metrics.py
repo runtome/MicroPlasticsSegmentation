@@ -21,6 +21,18 @@ def compute_iou(
     return float(intersection) / float(union + eps)
 
 
+def compute_dice(
+    pred_mask: np.ndarray,
+    gt_mask: np.ndarray,
+    eps: float = 1e-6,
+) -> float:
+    """Binary Dice score between two masks (H, W)."""
+    pred_bool = pred_mask.astype(bool)
+    gt_bool = gt_mask.astype(bool)
+    intersection = (pred_bool & gt_bool).sum()
+    return float(2 * intersection) / float(pred_bool.sum() + gt_bool.sum() + eps)
+
+
 def compute_iou_batch(
     pred_masks: torch.Tensor,
     gt_masks: torch.Tensor,

@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 import numpy as np
 import torch
 
-from training.metrics import compute_iou, compute_map, compute_f1, MetricTracker
+from training.metrics import compute_iou, compute_dice, compute_map, compute_f1, MetricTracker
 
 
 class Evaluator:
@@ -18,9 +18,10 @@ class Evaluator:
     Returns:
         {
             iou_per_class: {1: float, 2: float, 3: float},
-            mIoU: float,
-            f1_per_class: {1: float, 2: float, 3: float},
-            F1_macro: float,
+            mIoU: float (mean of per-class IoU),
+            image_iou: float (class-agnostic per-image IoU),
+            dice_per_class: {1: float, 2: float, 3: float},
+            mDice: float (mean of per-class Dice),
             mAP50: float,
             mAP75: float,
             params: int,
@@ -134,10 +135,12 @@ class Evaluator:
             all_gt_masks, all_gt_labels, iou_threshold=0.75,
         )
 
-        # Per-class IoU
+        # Per-class IoU and Dice
         iou_per_class = {}
+        dice_per_class = {}
         for cls_id in [1, 2, 3]:
             cls_ious = []
+            cls_dices = []
             for pmasks, plabels, gmasks, glabels in zip(
                 all_pred_masks, all_pred_labels, all_gt_masks, all_gt_labels
             ):
@@ -145,11 +148,17 @@ class Evaluator:
                     if int(gl) != cls_id:
                         continue
                     best_iou = 0.0
+                    best_dice = 0.0
                     for k, (pm, pl) in enumerate(zip(pmasks, plabels)):
                         if int(pl) == cls_id:
-                            best_iou = max(best_iou, compute_iou(pm, gm))
+                            iou_val = compute_iou(pm, gm)
+                            if iou_val > best_iou:
+                                best_iou = iou_val
+                                best_dice = compute_dice(pm, gm)
                     cls_ious.append(best_iou)
+                    cls_dices.append(best_dice)
             iou_per_class[cls_id] = float(np.mean(cls_ious)) if cls_ious else 0.0
+            dice_per_class[cls_id] = float(np.mean(cls_dices)) if cls_dices else 0.0
 
         # F1: image-level multi-label classification
         # For each image, cls_probs > 0.5 gives the predicted class set;
@@ -191,7 +200,10 @@ class Evaluator:
         cls_names = {1: "Fiber", 2: "Fragment", 3: "Film"}
         return {
             "iou_per_class": iou_per_class,
-            "mIoU": float(np.mean(iou_list)) if iou_list else float(np.mean(list(iou_per_class.values()))),
+            "mIoU": float(np.mean(list(iou_per_class.values()))),
+            "image_iou": float(np.mean(iou_list)) if iou_list else 0.0,
+            "dice_per_class": dice_per_class,
+            "mDice": float(np.mean(list(dice_per_class.values()))),
             "mAP50": map50.get("mAP", 0.0),
             "mAP75": map75.get("mAP", 0.0),
             "AP_per_class_50": {c: map50.get(f"AP_{c}", 0.0) for c in [1, 2, 3]},

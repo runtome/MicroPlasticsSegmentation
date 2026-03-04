@@ -15,6 +15,10 @@ METRIC_COLS = [
     "IoU_Fiber",
     "IoU_Fragment",
     "IoU_Film",
+    "mDice",
+    "Dice_Fiber",
+    "Dice_Fragment",
+    "Dice_Film",
     "mAP50",
     "mAP75",
     "F1_macro",
@@ -46,15 +50,20 @@ class ModelComparison:
         """
         # iou_per_class keys may be int (from evaluator) or str (after JSON round-trip)
         iou_per_class = metrics.get("iou_per_class", {})
-        def _iou(cls_id):
-            return float(iou_per_class.get(cls_id, iou_per_class.get(str(cls_id), 0.0)))
+        dice_per_class = metrics.get("dice_per_class", {})
+        def _get(d, cls_id):
+            return float(d.get(cls_id, d.get(str(cls_id), 0.0)))
 
         record = {
             "model": model_name,
             "mIoU": round(metrics.get("mIoU", 0.0), 4),
-            "IoU_Fiber": round(_iou(1), 4),
-            "IoU_Fragment": round(_iou(2), 4),
-            "IoU_Film": round(_iou(3), 4),
+            "IoU_Fiber": round(_get(iou_per_class, 1), 4),
+            "IoU_Fragment": round(_get(iou_per_class, 2), 4),
+            "IoU_Film": round(_get(iou_per_class, 3), 4),
+            "mDice": round(metrics.get("mDice", 0.0), 4),
+            "Dice_Fiber": round(_get(dice_per_class, 1), 4),
+            "Dice_Fragment": round(_get(dice_per_class, 2), 4),
+            "Dice_Film": round(_get(dice_per_class, 3), 4),
             "mAP50": round(metrics.get("mAP50", 0.0), 4),
             "mAP75": round(metrics.get("mAP75", 0.0), 4),
             "F1_macro": round(metrics.get("F1_macro", 0.0), 4),

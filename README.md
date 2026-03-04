@@ -175,10 +175,23 @@ tensorboard --logdir outputs/logs
 ### Step 4 — Evaluate a checkpoint
 
 ```bash
+# Standard models (U-Net, Mask R-CNN, SegFormer, etc.)
 python scripts/evaluate.py \
     --config configs/unet.yaml \
     --checkpoint outputs/checkpoints/unet_best.pth
+
+# YOLO models — use the .pt checkpoint (not .pth)
+python scripts/evaluate.py \
+    --config configs/yolo26.yaml \
+    --checkpoint best
+
+# Or pass the exact path to the Ultralytics .pt file
+python scripts/evaluate.py \
+    --config configs/yolo26.yaml \
+    --checkpoint outputs/checkpoints/yolo26/yolo26s-seg_best.pt
 ```
+
+> **YOLO note:** YOLO evaluation uses the Ultralytics validation pipeline internally (`model.val()`), so it reports box and segmentation mAP metrics rather than pixel-level mIoU. After training, best weights are automatically copied to `outputs/checkpoints/yolo26/` for easy access.
 
 ### Step 5 — Compare all trained models
 

@@ -49,6 +49,12 @@ def resolve_checkpoint(ckpt_arg: str, model_name: str, config: dict) -> str:
     if ckpt_arg.lower() == "best":
         if default_dir.is_dir():
             return _best_in_dir(default_dir, str(default_dir))
+        # Also search runs/segment/ where Ultralytics may save YOLO weights
+        for search_root in [Path("runs/segment"), Path("runs")]:
+            yolo_dirs = sorted(search_root.glob(f"**/{model_name}*/weights/best.pt"))
+            if yolo_dirs:
+                print(f"[checkpoint] Found YOLO checkpoint: {yolo_dirs[-1]}")
+                return str(yolo_dirs[-1])
         raise FileNotFoundError(
             f"Checkpoint dir not found: {default_dir}\n"
             "Run training first: python scripts/train.py --config ..."
@@ -59,25 +65,38 @@ def resolve_checkpoint(ckpt_arg: str, model_name: str, config: dict) -> str:
     if candidate.is_file():
         return str(candidate)
 
+    # 4b. Also try with .pt extension for YOLO checkpoints
+    if not p.suffix:
+        for ext in [".pth", ".pt"]:
+            candidate = default_dir / (p.name + ext)
+            if candidate.is_file():
+                return str(candidate)
+
     # 5. Nothing matched → helpful error
     _checkpoint_not_found(p, default_dir)
 
 
-def _best_in_dir(directory: Path, label: str) -> str:
-    """Return the .pth file with the highest val_miou score in the filename."""
-    pths = sorted(directory.glob("*.pth"))
-    if not pths:
+def _best_in_dir(directory: Path, label: str, extensions: tuple = (".pth", ".pt")) -> str:
+    """Return the best checkpoint file in the directory."""
+    all_ckpts = []
+    for ext in extensions:
+        all_ckpts.extend(directory.glob(f"*{ext}"))
+    all_ckpts = sorted(all_ckpts)
+    if not all_ckpts:
         raise FileNotFoundError(
-            f"No .pth checkpoints found in: {directory}"
+            f"No checkpoint files ({', '.join(extensions)}) found in: {directory}"
         )
 
     # Try to rank by val_miou value embedded in filename (e.g. val_miou02533)
     def _score(f):
         import re
+        # Prefer files with "best" in name
+        if "best" in f.stem:
+            return 999999
         m = re.search(r"val_miou(\d+)", f.name)
         return int(m.group(1)) if m else 0
 
-    best = max(pths, key=_score)
+    best = max(all_ckpts, key=_score)
     print(f"[checkpoint] Auto-selected best checkpoint from {label}:\n  {best}")
     return str(best)
 
@@ -85,7 +104,7 @@ def _best_in_dir(directory: Path, label: str) -> str:
 def _checkpoint_not_found(p: Path, default_dir: Path):
     msg = f"\nCheckpoint not found: {p}\n"
     if default_dir.is_dir():
-        pths = list(default_dir.glob("*.pth"))
+        pths = list(default_dir.glob("*.pth")) + list(default_dir.glob("*.pt"))
         if pths:
             msg += f"\nAvailable checkpoints in {default_dir}:\n"
             for f in sorted(pths):
@@ -142,6 +161,120 @@ def _save_confusion_matrix(cm: np.ndarray, model_name: str, output_dir: Path) ->
     return out_path
 
 
+def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dict:
+    """Evaluate a YOLO model using Ultralytics validation pipeline."""
+    from models.yolo26.yolo26_wrapper import YOLO26Wrapper
+
+    data_yaml = config.get("data", {}).get("yolo_yaml", "data_splits/yolo/dataset.yaml")
+    imgsz = config.get("training", {}).get("imgsz", 640)
+
+    wrapper = YOLO26Wrapper.__new__(YOLO26Wrapper)
+    wrapper.config = config
+    from ultralytics import YOLO
+    wrapper.model = YOLO(ckpt_path)
+    print(f"Loaded YOLO checkpoint: {ckpt_path}")
+
+    params = sum(p.numel() for p in wrapper.model.model.parameters())
+    print(f"Model: yolo26 | Params: {params:,}")
+
+    results = wrapper.model.val(
+        data=data_yaml, imgsz=imgsz, device=device, split=split,
+    )
+
+    # Extract per-class metrics from Ultralytics results
+    cls_names = ["Fiber", "Fragment", "Film"]
+    metrics = {
+        "mIoU": 0.0,  # YOLO doesn't directly report IoU; use seg mAP as proxy
+        "iou_per_class": {},
+        "mAP50": float(results.box.map50) if hasattr(results, "box") else 0.0,
+        "mAP75": float(results.box.map75) if hasattr(results, "box") else 0.0,
+        "mAP50-95_box": float(results.box.map) if hasattr(results, "box") else 0.0,
+        "params": params,
+        "inference_time_ms": results.speed.get("inference", 0.0) if hasattr(results, "speed") else 0.0,
+    }
+
+    if hasattr(results, "seg"):
+        metrics["seg_mAP50"] = float(results.seg.map50)
+        metrics["seg_mAP75"] = float(results.seg.map75)
+        metrics["seg_mAP50-95"] = float(results.seg.map)
+
+        # Per-class seg AP50
+        if hasattr(results.seg, "maps") and results.seg.maps is not None:
+            maps = results.seg.maps
+            for i, name in enumerate(cls_names):
+                if i < len(maps):
+                    metrics[f"seg_AP50_{name}"] = float(maps[i])
+
+    if hasattr(results, "box"):
+        # Per-class box metrics
+        box_p = results.box.p if hasattr(results.box, "p") else []
+        box_r = results.box.r if hasattr(results.box, "r") else []
+        for i, name in enumerate(cls_names):
+            if i < len(box_p):
+                metrics[f"Precision_{name}"] = float(box_p[i])
+            if i < len(box_r):
+                metrics[f"Recall_{name}"] = float(box_r[i])
+            p = metrics.get(f"Precision_{name}", 0.0)
+            r = metrics.get(f"Recall_{name}", 0.0)
+            metrics[f"F1_{name}"] = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+
+        # Macro averages
+        precs = [metrics.get(f"Precision_{n}", 0.0) for n in cls_names]
+        recs = [metrics.get(f"Recall_{n}", 0.0) for n in cls_names]
+        f1s = [metrics.get(f"F1_{n}", 0.0) for n in cls_names]
+        metrics["Precision_macro"] = sum(precs) / len(precs) if precs else 0.0
+        metrics["Recall_macro"] = sum(recs) / len(recs) if recs else 0.0
+        metrics["F1_macro"] = sum(f1s) / len(f1s) if f1s else 0.0
+
+    return metrics
+
+
+def _print_and_save_results(metrics: dict, model_name: str, split: str, output_arg: str):
+    """Print YOLO evaluation results and save JSON."""
+    cls_names = ["Fiber", "Fragment", "Film"]
+
+    print(f"\n{'=' * 60}")
+    print(f"Results for {model_name} on {split} split:")
+    print(f"{'=' * 60}")
+
+    print(f"  Box mAP50:       {metrics.get('mAP50', 0.0):.4f}")
+    print(f"  Box mAP75:       {metrics.get('mAP75', 0.0):.4f}")
+    print(f"  Box mAP50-95:    {metrics.get('mAP50-95_box', 0.0):.4f}")
+    print()
+    print(f"  Seg mAP50:       {metrics.get('seg_mAP50', 0.0):.4f}")
+    print(f"  Seg mAP75:       {metrics.get('seg_mAP75', 0.0):.4f}")
+    print(f"  Seg mAP50-95:    {metrics.get('seg_mAP50-95', 0.0):.4f}")
+    print()
+    for name in cls_names:
+        ap = metrics.get(f"seg_AP50_{name}", 0.0)
+        print(f"  Seg AP50 {name:<10}: {ap:.4f}")
+    print()
+
+    print(f"  {'Class':<12} {'Precision':>10} {'Recall':>10} {'F1':>10}")
+    print(f"  {'-'*44}")
+    for cls in cls_names:
+        p = metrics.get(f"Precision_{cls}", 0.0)
+        r = metrics.get(f"Recall_{cls}", 0.0)
+        f = metrics.get(f"F1_{cls}", 0.0)
+        print(f"  {cls:<12} {p:>10.4f} {r:>10.4f} {f:>10.4f}")
+    print(f"  {'-'*44}")
+    print(f"  {'Macro':<12} {metrics.get('Precision_macro', 0.0):>10.4f}"
+          f" {metrics.get('Recall_macro', 0.0):>10.4f}"
+          f" {metrics.get('F1_macro', 0.0):>10.4f}")
+    print()
+    print(f"  Params:          {metrics['params']:,}")
+    print(f"  Inference (ms):  {metrics['inference_time_ms']:.1f}")
+    print(f"{'=' * 60}")
+
+    # Save results JSON
+    results_dir = Path(output_arg).parent if output_arg else Path("outputs/results")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_arg or str(results_dir / f"{model_name}_results.json")
+    with open(output_path, "w") as f:
+        json.dump(metrics, f, indent=2, default=lambda x: float(x) if hasattr(x, '__float__') else str(x))
+    print(f"Results saved to: {output_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a trained model")
     parser.add_argument("--config", required=True, help="Path to config YAML")
@@ -160,6 +293,12 @@ def main():
 
     # Resolve checkpoint path
     ckpt_path = resolve_checkpoint(args.checkpoint, model_name, config)
+
+    # ── YOLO models use Ultralytics evaluation pipeline ──────────────────────
+    if model_name == "yolo26":
+        metrics = _evaluate_yolo(config, ckpt_path, args.split, device)
+        _print_and_save_results(metrics, model_name, args.split, args.output)
+        return
 
     # Load model
     from scripts.train import get_model

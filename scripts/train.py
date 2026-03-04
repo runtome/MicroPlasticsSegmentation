@@ -232,6 +232,23 @@ def _train_yolo(config: dict):
     results = YOLO26Wrapper.train_all_variants(config, data_yaml, variants)
     print("YOLO training results:", results)
 
+    # Copy best weights to the expected checkpoint dir so evaluate.py can find them
+    ckpt_dir = Path(config.get("output", {}).get(
+        "checkpoint_dir", "outputs/checkpoints/yolo26/"
+    ))
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    import shutil
+    for v in variants:
+        # Ultralytics may save under runs/segment/<project>/<name>/weights/
+        for search_root in [Path("."), Path("runs/segment"), Path("runs")]:
+            candidates = sorted(search_root.glob(f"**/{ v }/weights/best.pt"))
+            if candidates:
+                src = candidates[-1]  # most recent
+                dst = ckpt_dir / f"{v}_best.pt"
+                shutil.copy2(src, dst)
+                print(f"Copied {src} -> {dst}")
+                break
+
 
 if __name__ == "__main__":
     main()

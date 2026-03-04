@@ -162,92 +162,222 @@ def _save_confusion_matrix(cm: np.ndarray, model_name: str, output_dir: Path) ->
 
 
 def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dict:
-    """Evaluate a YOLO model using Ultralytics validation pipeline."""
-    from models.yolo26.yolo26_wrapper import YOLO26Wrapper
-
-    data_yaml = config.get("data", {}).get("yolo_yaml", "data_splits/yolo/dataset.yaml")
-    imgsz = config.get("training", {}).get("imgsz", 640)
-
-    wrapper = YOLO26Wrapper.__new__(YOLO26Wrapper)
-    wrapper.config = config
+    """
+    Evaluate a YOLO model:
+      1) Ultralytics val() for box/seg mAP
+      2) Per-image prediction vs COCO GT for pixel-level IoU, Dice, image IoU, F1
+    """
+    import time
+    import cv2
     from ultralytics import YOLO
-    wrapper.model = YOLO(ckpt_path)
+    from training.metrics import compute_iou, compute_dice
+
+    data_cfg = config.get("data", {})
+    data_yaml = data_cfg.get("yolo_yaml", "data_splits/yolo/dataset.yaml")
+    imgsz = config.get("training", {}).get("imgsz", 640)
+    cls_names = ["Fiber", "Fragment", "Film"]
+
+    model = YOLO(ckpt_path)
     print(f"Loaded YOLO checkpoint: {ckpt_path}")
 
-    params = sum(p.numel() for p in wrapper.model.model.parameters())
+    params = sum(p.numel() for p in model.model.parameters())
     print(f"Model: yolo26 | Params: {params:,}")
 
-    results = wrapper.model.val(
-        data=data_yaml, imgsz=imgsz, device=device, split=split,
-    )
+    # ── Part 1: Ultralytics val() for mAP metrics ────────────────────────────
+    val_results = model.val(data=data_yaml, imgsz=imgsz, device=device, split=split)
 
-    # Extract per-class metrics from Ultralytics results
-    cls_names = ["Fiber", "Fragment", "Film"]
     metrics = {
-        "mIoU": 0.0,  # YOLO doesn't directly report IoU; use seg mAP as proxy
-        "iou_per_class": {},
-        "mAP50": float(results.box.map50) if hasattr(results, "box") else 0.0,
-        "mAP75": float(results.box.map75) if hasattr(results, "box") else 0.0,
-        "mAP50-95_box": float(results.box.map) if hasattr(results, "box") else 0.0,
+        "mAP50": float(val_results.box.map50) if hasattr(val_results, "box") else 0.0,
+        "mAP75": float(val_results.box.map75) if hasattr(val_results, "box") else 0.0,
         "params": params,
-        "inference_time_ms": results.speed.get("inference", 0.0) if hasattr(results, "speed") else 0.0,
     }
+    if hasattr(val_results, "seg"):
+        metrics["seg_mAP50"] = float(val_results.seg.map50)
+        metrics["seg_mAP75"] = float(val_results.seg.map75)
+        metrics["seg_mAP50-95"] = float(val_results.seg.map)
 
-    if hasattr(results, "seg"):
-        metrics["seg_mAP50"] = float(results.seg.map50)
-        metrics["seg_mAP75"] = float(results.seg.map75)
-        metrics["seg_mAP50-95"] = float(results.seg.map)
+    # ── Part 2: Pixel-level IoU / Dice via per-image inference ────────────────
+    # Build GT from COCO annotations for the requested split
+    images_dir = data_cfg.get("images_dir", "images/")
+    annotation_path = data_cfg.get("annotation", "annotation.json")
+    splits_file = data_cfg.get("splits_file", "data_splits/splits.json")
 
-        # Per-class seg AP50
-        if hasattr(results.seg, "maps") and results.seg.maps is not None:
-            maps = results.seg.maps
-            for i, name in enumerate(cls_names):
-                if i < len(maps):
-                    metrics[f"seg_AP50_{name}"] = float(maps[i])
+    with open(splits_file) as f:
+        splits = json.load(f)
+    with open(annotation_path) as f:
+        coco = json.load(f)
 
-    if hasattr(results, "box"):
-        # Per-class box metrics
-        box_p = results.box.p if hasattr(results.box, "p") else []
-        box_r = results.box.r if hasattr(results.box, "r") else []
-        for i, name in enumerate(cls_names):
-            if i < len(box_p):
-                metrics[f"Precision_{name}"] = float(box_p[i])
-            if i < len(box_r):
-                metrics[f"Recall_{name}"] = float(box_r[i])
-            p = metrics.get(f"Precision_{name}", 0.0)
-            r = metrics.get(f"Recall_{name}", 0.0)
-            metrics[f"F1_{name}"] = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+    split_filenames = set(splits.get(split, []))
+    fname_to_img = {img["file_name"]: img for img in coco["images"]}
+    img_id_to_anns = {}
+    for ann in coco["annotations"]:
+        img_id_to_anns.setdefault(ann["image_id"], []).append(ann)
 
-        # Macro averages
-        precs = [metrics.get(f"Precision_{n}", 0.0) for n in cls_names]
-        recs = [metrics.get(f"Recall_{n}", 0.0) for n in cls_names]
-        f1s = [metrics.get(f"F1_{n}", 0.0) for n in cls_names]
-        metrics["Precision_macro"] = sum(precs) / len(precs) if precs else 0.0
-        metrics["Recall_macro"] = sum(recs) / len(recs) if recs else 0.0
-        metrics["F1_macro"] = sum(f1s) / len(f1s) if f1s else 0.0
+    # Per-class IoU / Dice accumulators
+    cls_ious = {1: [], 2: [], 3: []}
+    cls_dices = {1: [], 2: [], 3: []}
+    image_ious = []
+    inference_times = []
+
+    # Image-level class sets for F1
+    all_pred_cls_sets = []
+    all_gt_cls_sets = []
+
+    print(f"\nComputing pixel-level metrics on {len(split_filenames)} {split} images...")
+
+    for fname in sorted(split_filenames):
+        img_meta = fname_to_img.get(fname)
+        if img_meta is None:
+            continue
+
+        img_path = str(Path(images_dir) / fname)
+        img_bgr = cv2.imread(img_path)
+        if img_bgr is None:
+            continue
+
+        h_orig, w_orig = img_bgr.shape[:2]
+
+        # Run YOLO inference
+        t0 = time.perf_counter()
+        preds = model.predict(
+            img_path, imgsz=imgsz, device=device,
+            conf=0.25, iou=0.45, retina_masks=True, verbose=False,
+        )
+        t1 = time.perf_counter()
+        inference_times.append((t1 - t0) * 1000)
+
+        result = preds[0]
+
+        # Build GT masks at original resolution
+        anns = img_id_to_anns.get(img_meta["id"], [])
+        gt_masks_list = []  # (mask, class_id) pairs
+        for ann in anns:
+            mask = np.zeros((h_orig, w_orig), dtype=np.uint8)
+            for seg in ann.get("segmentation", []):
+                pts = np.array(seg, dtype=np.float32).reshape(-1, 2)
+                cv2.fillPoly(mask, [pts.astype(np.int32)], 1)
+            gt_masks_list.append((mask, ann["category_id"]))
+
+        gt_cls = set(cid for _, cid in gt_masks_list)
+        all_gt_cls_sets.append(gt_cls)
+
+        # Extract predicted masks + labels
+        pred_masks_list = []  # (mask, class_id) pairs
+        if result.masks is not None and len(result.masks) > 0:
+            pred_mask_data = result.masks.data.cpu().numpy()  # (N, mask_h, mask_w)
+            pred_classes = result.boxes.cls.cpu().numpy().astype(int)  # 0-indexed
+
+            for k in range(len(pred_mask_data)):
+                pm = pred_mask_data[k]
+                # Resize to original image size if needed
+                if pm.shape[0] != h_orig or pm.shape[1] != w_orig:
+                    pm = cv2.resize(pm, (w_orig, h_orig), interpolation=cv2.INTER_LINEAR)
+                pm = (pm > 0.5).astype(np.uint8)
+                pred_masks_list.append((pm, pred_classes[k] + 1))  # convert to 1-indexed
+
+        pred_cls = set(cid for _, cid in pred_masks_list)
+        all_pred_cls_sets.append(pred_cls)
+
+        # Per-class IoU / Dice: for each GT instance, find best matching prediction
+        for gm, g_cls in gt_masks_list:
+            best_iou = 0.0
+            best_dice = 0.0
+            for pm, p_cls in pred_masks_list:
+                if p_cls == g_cls:
+                    iou_val = compute_iou(pm, gm)
+                    if iou_val > best_iou:
+                        best_iou = iou_val
+                        best_dice = compute_dice(pm, gm)
+            cls_ious[g_cls].append(best_iou)
+            cls_dices[g_cls].append(best_dice)
+
+        # Image-level IoU (class-agnostic union of all masks)
+        if gt_masks_list and pred_masks_list:
+            gt_union = np.zeros((h_orig, w_orig), dtype=np.uint8)
+            for gm, _ in gt_masks_list:
+                gt_union = np.maximum(gt_union, gm)
+            pred_union = np.zeros((h_orig, w_orig), dtype=np.uint8)
+            for pm, _ in pred_masks_list:
+                pred_union = np.maximum(pred_union, pm)
+            image_ious.append(compute_iou(pred_union, gt_union))
+
+    # Aggregate pixel-level metrics
+    iou_per_class = {}
+    dice_per_class = {}
+    for cls_id in [1, 2, 3]:
+        iou_per_class[cls_id] = float(np.mean(cls_ious[cls_id])) if cls_ious[cls_id] else 0.0
+        dice_per_class[cls_id] = float(np.mean(cls_dices[cls_id])) if cls_dices[cls_id] else 0.0
+
+    metrics["iou_per_class"] = iou_per_class
+    metrics["mIoU"] = float(np.mean(list(iou_per_class.values())))
+    metrics["image_iou"] = float(np.mean(image_ious)) if image_ious else 0.0
+    metrics["dice_per_class"] = dice_per_class
+    metrics["mDice"] = float(np.mean(list(dice_per_class.values())))
+    metrics["inference_time_ms"] = float(np.mean(inference_times)) if inference_times else 0.0
+
+    # Image-level F1 / Precision / Recall
+    f1_scores, prec_scores, rec_scores = [], [], []
+    for c in [1, 2, 3]:
+        tp = sum(c in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
+        fp = sum(c in ps and c not in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
+        fn = sum(c not in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
+        prec = tp / (tp + fp + 1e-6)
+        rec = tp / (tp + fn + 1e-6)
+        f1 = 2 * prec * rec / (prec + rec + 1e-6)
+        name = cls_names[c - 1]
+        metrics[f"Precision_{name}"] = float(prec)
+        metrics[f"Recall_{name}"] = float(rec)
+        metrics[f"F1_{name}"] = float(f1)
+        prec_scores.append(prec)
+        rec_scores.append(rec)
+        f1_scores.append(f1)
+    metrics["Precision_macro"] = float(np.mean(prec_scores))
+    metrics["Recall_macro"] = float(np.mean(rec_scores))
+    metrics["F1_macro"] = float(np.mean(f1_scores))
+
+    # Image-level confusion matrix
+    conf_matrix = np.zeros((3, 3), dtype=int)
+    for gt_set, pred_set in zip(all_gt_cls_sets, all_pred_cls_sets):
+        if not gt_set or not pred_set:
+            continue
+        gt_c = min(gt_set) - 1
+        pred_c = min(pred_set) - 1
+        if 0 <= gt_c < 3 and 0 <= pred_c < 3:
+            conf_matrix[gt_c][pred_c] += 1
+    metrics["confusion_matrix"] = conf_matrix.tolist()
 
     return metrics
 
 
 def _print_and_save_results(metrics: dict, model_name: str, split: str, output_arg: str):
-    """Print YOLO evaluation results and save JSON."""
+    """Print YOLO evaluation results (same format as standard models) and save JSON."""
     cls_names = ["Fiber", "Fragment", "Film"]
+
+    iou_pc = metrics.get("iou_per_class", {})
+    dice_pc = metrics.get("dice_per_class", {})
+    def _iou(c): return float(iou_pc.get(c, iou_pc.get(str(c), 0.0)))
+    def _dice(c): return float(dice_pc.get(c, dice_pc.get(str(c), 0.0)))
 
     print(f"\n{'=' * 60}")
     print(f"Results for {model_name} on {split} split:")
     print(f"{'=' * 60}")
-
-    print(f"  Box mAP50:       {metrics.get('mAP50', 0.0):.4f}")
-    print(f"  Box mAP75:       {metrics.get('mAP75', 0.0):.4f}")
-    print(f"  Box mAP50-95:    {metrics.get('mAP50-95_box', 0.0):.4f}")
+    print(f"  mIoU:            {metrics.get('mIoU', 0.0):.4f}")
+    print(f"  IoU Fiber:       {_iou(1):.4f}")
+    print(f"  IoU Fragment:    {_iou(2):.4f}")
+    print(f"  IoU Film:        {_iou(3):.4f}")
+    print(f"  Image IoU:       {metrics.get('image_iou', 0.0):.4f}")
     print()
-    print(f"  Seg mAP50:       {metrics.get('seg_mAP50', 0.0):.4f}")
-    print(f"  Seg mAP75:       {metrics.get('seg_mAP75', 0.0):.4f}")
-    print(f"  Seg mAP50-95:    {metrics.get('seg_mAP50-95', 0.0):.4f}")
+    print(f"  mDice:           {metrics.get('mDice', 0.0):.4f}")
+    print(f"  Dice Fiber:      {_dice(1):.4f}")
+    print(f"  Dice Fragment:   {_dice(2):.4f}")
+    print(f"  Dice Film:       {_dice(3):.4f}")
     print()
-    for name in cls_names:
-        ap = metrics.get(f"seg_AP50_{name}", 0.0)
-        print(f"  Seg AP50 {name:<10}: {ap:.4f}")
+    print(f"  mAP50:           {metrics.get('mAP50', 0.0):.4f}")
+    print(f"  mAP75:           {metrics.get('mAP75', 0.0):.4f}")
+    if "seg_mAP50" in metrics:
+        print(f"  Seg mAP50:       {metrics['seg_mAP50']:.4f}")
+        print(f"  Seg mAP75:       {metrics['seg_mAP75']:.4f}")
+        print(f"  Seg mAP50-95:    {metrics['seg_mAP50-95']:.4f}")
     print()
 
     print(f"  {'Class':<12} {'Precision':>10} {'Recall':>10} {'F1':>10}")
@@ -265,6 +395,23 @@ def _print_and_save_results(metrics: dict, model_name: str, split: str, output_a
     print(f"  Params:          {metrics['params']:,}")
     print(f"  Inference (ms):  {metrics['inference_time_ms']:.1f}")
     print(f"{'=' * 60}")
+
+    # Print confusion matrix if available
+    cm = np.array(metrics.get("confusion_matrix", [[0]*3]*3))
+    if cm.any():
+        print(f"\nConfusion Matrix (rows=GT, cols=Predicted, image-level):")
+        header = f"  {'':>12}" + "".join(f"{n:>12}" for n in cls_names)
+        print(header)
+        print(f"  {'-' * (12 + 12*3)}")
+        for i, row_name in enumerate(cls_names):
+            row_str = "".join(f"{cm[i, j]:>12}" for j in range(3))
+            print(f"  {row_name:<12}{row_str}")
+        print()
+
+        # Save confusion matrix image
+        results_dir = Path(output_arg).parent if output_arg else Path("outputs/results")
+        results_dir.mkdir(parents=True, exist_ok=True)
+        _save_confusion_matrix(cm, model_name, results_dir)
 
     # Save results JSON
     results_dir = Path(output_arg).parent if output_arg else Path("outputs/results")

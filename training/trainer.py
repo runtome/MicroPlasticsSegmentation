@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import Adam, AdamW, SGD
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 try:
     from torch.utils.tensorboard import SummaryWriter
     _TENSORBOARD_AVAILABLE = True
@@ -100,6 +100,22 @@ class Trainer:
 
     def _build_scheduler(self):
         cb_cfg = self.config.get("callbacks", {})
+        train_cfg = self.config.get("training", {})
+
+        # Check for cosine annealing scheduler
+        sched_cfg = cb_cfg.get("scheduler", {})
+        sched_name = sched_cfg.get("name", "").lower() if sched_cfg else ""
+
+        if sched_name == "cosine":
+            T_max = sched_cfg.get("T_max", train_cfg.get("num_epochs", 50))
+            eta_min = sched_cfg.get("min_lr", 1e-6)
+            return CosineAnnealingLR(
+                self.optimizer,
+                T_max=T_max,
+                eta_min=eta_min,
+            )
+
+        # Fallback: ReduceLROnPlateau
         rlrop = cb_cfg.get("reduce_lr", {})
         if rlrop:
             return ReduceLROnPlateau(
@@ -182,8 +198,11 @@ class Trainer:
 
             # Scheduler step
             if self.scheduler is not None:
-                val_loss = val_metrics.get("loss", val_metrics.get("val_loss", 0.0))
-                self.scheduler.step(val_loss)
+                if isinstance(self.scheduler, ReduceLROnPlateau):
+                    val_loss = val_metrics.get("loss", val_metrics.get("val_loss", 0.0))
+                    self.scheduler.step(val_loss)
+                else:
+                    self.scheduler.step()
 
             # Checkpoint
             all_metrics = {**{f"train_{k}": v for k, v in train_metrics.items()},

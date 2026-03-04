@@ -3,7 +3,7 @@ defaults:
 
 model:
   name: attention_unet
-  encoder: efficientnet-b0
+  encoder: efficientnet-b3
   pretrained: true
   in_channels: 3
   num_classes: 3
@@ -11,22 +11,22 @@ model:
   dropout: 0.3
 
 training:
-  optimizer: adam
-  lr: 1.0e-3
-  weight_decay: 1.0e-4
+  optimizer: adamw
+  lr: 3.0e-4
+  weight_decay: 1.0e-2
   batch_size: 4
-  num_epochs: 50
+  num_epochs: 100
   use_5fold_cv: true
   num_folds: 5
   loss: combined
 
 callbacks:
   early_stopping:
-    patience: 10
+    patience: 15
     monitor: val_loss
-  reduce_lr:
-    factor: 0.5
-    patience: 5
+  scheduler:
+    name: cosine
+    T_max: 100
     min_lr: 1.0e-6
   checkpoint:
     monitor: val_miou

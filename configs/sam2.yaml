@@ -6,7 +6,7 @@ model:
   model_cfg: sam2_hiera_small.yaml
   checkpoint: sam2_hiera_small.pt  # auto-downloaded
   freeze_image_encoder: true
-  num_classes: 3
+  num_classes: 2
 
 training:
   optimizer: adamw

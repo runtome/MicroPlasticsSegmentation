@@ -5,7 +5,7 @@ model:
   name: efficient_sam
   variant: efficient_sam_vits  # vits or vitb
   freeze_image_encoder: true
-  num_classes: 3
+  num_classes: 2
 
 training:
   optimizer: adamw

@@ -11,14 +11,13 @@ import matplotlib.patches as mpatches
 from matplotlib.colors import to_rgba
 
 
-CLASS_NAMES = {0: "Background", 1: "Fiber", 2: "Fragment", 3: "Film"}
+CLASS_NAMES = {0: "Background", 1: "Fiber", 2: "Fragment"}
 
 # Color palette per class (RGB)
 CLASS_COLORS = {
     0: (128, 128, 128),  # Background — gray
     1: (255, 100, 100),  # Fiber — red
     2: (100, 200, 100),  # Fragment — green
-    3: (100, 100, 255),  # Film — blue
 }
 
 
@@ -139,7 +138,7 @@ def visualize_predictions(
         if isinstance(sem_mask, torch.Tensor):
             sem_mask = sem_mask.numpy()
 
-        for cls_id in [1, 2, 3]:
+        for cls_id in [1, 2]:
             mask = (sem_mask == cls_id)
             if mask.sum() == 0:
                 continue
@@ -162,7 +161,7 @@ def visualize_gt(
     Args:
         image : (H, W, 3) uint8 RGB
         masks : (N, H, W) binary, numpy or torch.Tensor
-        labels: (N,) int class ids (1=Fiber, 2=Fragment, 3=Film), numpy or torch.Tensor
+        labels: (N,) int class ids (1=Fiber, 2=Fragment), numpy or torch.Tensor
     """
     if image is None:
         return np.zeros((640, 640, 3), dtype=np.uint8)
@@ -254,10 +253,9 @@ def plot_comparison(
         for cls_id, (c, name) in {
             1: (CLASS_COLORS[1], "Fiber"),
             2: (CLASS_COLORS[2], "Fragment"),
-            3: (CLASS_COLORS[3], "Film"),
         }.items()
     ]
-    fig.legend(handles=legend_patches, loc="lower center", ncol=3, fontsize=12)
+    fig.legend(handles=legend_patches, loc="lower center", ncol=2, fontsize=12)
 
     plt.tight_layout()
     if save_path:

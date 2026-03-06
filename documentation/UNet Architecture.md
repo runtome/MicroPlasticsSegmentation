@@ -14,7 +14,7 @@ Supports **two build modes** controlled by `configs/unet.yaml`:
 
 - **Input:** `(B, 3, 640, 640)`
 - **Seg output:** `(B, 1, 640, 640)` — binary mask logit per image
-- **Cls output:** `(B, 3)` — multi-label class probabilities (Fiber / Fragment / Film)
+- **Cls output:** `(B, 2)` — multi-label class probabilities (Fiber / Fragment)
 - **Requires (Mode B):** `pip install segmentation-models-pytorch`
 
 ---
@@ -190,7 +190,7 @@ bottleneck: (B, 512, H', W')
 ```
 
 Output is **multi-label** (independent sigmoid per class), not softmax.
-Classes: `0=Fiber`, `1=Fragment`, `2=Film` (0-indexed internally; dataset uses 1-indexed IDs).
+Classes: `0=Fiber`, `1=Fragment` (0-indexed internally; dataset uses 1-indexed IDs).
 
 ---
 

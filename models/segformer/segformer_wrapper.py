@@ -15,17 +15,17 @@ from training.metrics import compute_iou
 
 class SegFormerWrapper(BaseModel):
     """
-    SegFormer fine-tuned for 3-class semantic segmentation.
-    Each class gets a separate segmentation channel (0=Fiber, 1=Fragment, 2=Film).
+    SegFormer fine-tuned for 2-class semantic segmentation.
+    Each class gets a separate segmentation channel (0=Fiber, 1=Fragment).
     """
 
     def __init__(self, config: dict):
         super().__init__(config)
         model_cfg = config.get("model", config)
         pretrained = model_cfg.get("pretrained_model", "nvidia/mit-b2")
-        num_classes = model_cfg.get("num_classes", 3)
-        id2label = model_cfg.get("id2label", {0: "Fiber", 1: "Fragment", 2: "Film"})
-        label2id = model_cfg.get("label2id", {"Fiber": 0, "Fragment": 1, "Film": 2})
+        num_classes = model_cfg.get("num_classes", 2)
+        id2label = model_cfg.get("id2label", {0: "Fiber", 1: "Fragment"})
+        label2id = model_cfg.get("label2id", {"Fiber": 0, "Fragment": 1})
 
         # Convert int keys to int (YAML loads them as str sometimes)
         id2label = {int(k): v for k, v in id2label.items()}

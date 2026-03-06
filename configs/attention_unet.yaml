@@ -6,7 +6,7 @@ model:
   encoder: efficientnet-b3
   pretrained: true
   in_channels: 3
-  num_classes: 3
+  num_classes: 2
   features: [64, 128, 256, 512]
   dropout: 0.3
 

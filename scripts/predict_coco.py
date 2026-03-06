@@ -48,7 +48,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 CATEGORIES = [
     {"id": 1, "name": "Fiber"},
     {"id": 2, "name": "Fragment"},
-    {"id": 3, "name": "Film"},
 ]
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"}

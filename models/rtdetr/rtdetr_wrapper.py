@@ -66,7 +66,7 @@ class RTDETRWrapper(BaseModel):
         super().__init__(config)
         model_cfg = config.get("model", config)
         pretrained = model_cfg.get("pretrained_model", "PekingU/rtdetr-r50")
-        self.num_classes = model_cfg.get("num_classes", 3)
+        self.num_classes = model_cfg.get("num_classes", 2)
         self.image_size = config.get("data", {}).get("image_size", 640)
 
         self.model = self._load_model(pretrained)
@@ -76,7 +76,7 @@ class RTDETRWrapper(BaseModel):
     def _load_model(self, pretrained: str):
         try:
             from transformers import RTDetrForObjectDetection
-            id2label = {0: "Fiber", 1: "Fragment", 2: "Film"}
+            id2label = {0: "Fiber", 1: "Fragment"}
             label2id = {v: k for k, v in id2label.items()}
             model = RTDetrForObjectDetection.from_pretrained(
                 pretrained,

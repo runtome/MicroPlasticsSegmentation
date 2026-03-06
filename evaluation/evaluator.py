@@ -17,10 +17,10 @@ class Evaluator:
 
     Returns:
         {
-            iou_per_class: {1: float, 2: float, 3: float},
+            iou_per_class: {1: float, 2: float},
             mIoU: float (mean of per-class IoU),
             image_iou: float (class-agnostic per-image IoU),
-            dice_per_class: {1: float, 2: float, 3: float},
+            dice_per_class: {1: float, 2: float},
             mDice: float (mean of per-class Dice),
             mAP50: float,
             mAP75: float,
@@ -151,7 +151,7 @@ class Evaluator:
         # Per-class IoU and Dice
         iou_per_class = {}
         dice_per_class = {}
-        for cls_id in [1, 2, 3]:
+        for cls_id in [1, 2]:
             cls_ious = []
             cls_dices = []
             for pmasks, plabels, gmasks, glabels in zip(
@@ -180,7 +180,7 @@ class Evaluator:
         f1_scores = []
         prec_scores = []
         rec_scores = []
-        for c in [1, 2, 3]:
+        for c in [1, 2]:
             tp = sum(c in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
             fp = sum(c in ps and c not in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
             fn = sum(c not in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
@@ -198,19 +198,19 @@ class Evaluator:
         f1_metrics["Recall_macro"] = float(np.mean(rec_scores))
 
         # Image-level confusion matrix (one GT class vs one predicted class per image)
-        conf_matrix = np.zeros((3, 3), dtype=int)
+        conf_matrix = np.zeros((2, 2), dtype=int)
         for gt_cls_set, pred_cls_set in zip(all_gt_cls_sets, all_pred_cls_sets):
             if not gt_cls_set or not pred_cls_set:
                 continue
             gt_c = min(gt_cls_set) - 1       # single GT class per image
             pred_c = min(pred_cls_set) - 1   # primary predicted class
-            if 0 <= gt_c < 3 and 0 <= pred_c < 3:
+            if 0 <= gt_c < 2 and 0 <= pred_c < 2:
                 conf_matrix[gt_c][pred_c] += 1
 
         params = self.model.count_parameters() if hasattr(self.model, "count_parameters") else 0
         avg_inference_ms = float(np.mean(inference_times)) if inference_times else 0.0
 
-        cls_names = {1: "Fiber", 2: "Fragment", 3: "Film"}
+        cls_names = {1: "Fiber", 2: "Fragment"}
         return {
             "iou_per_class": iou_per_class,
             "mIoU": float(np.mean(list(iou_per_class.values()))),
@@ -219,12 +219,12 @@ class Evaluator:
             "mDice": float(np.mean(list(dice_per_class.values()))),
             "mAP50": map50.get("mAP", 0.0),
             "mAP75": map75.get("mAP", 0.0),
-            "AP_per_class_50": {c: map50.get(f"AP_{c}", 0.0) for c in [1, 2, 3]},
-            **{f"F1_{cls_names[c]}": f1_metrics.get(f"F1_{c}", 0.0) for c in [1, 2, 3]},
+            "AP_per_class_50": {c: map50.get(f"AP_{c}", 0.0) for c in [1, 2]},
+            **{f"F1_{cls_names[c]}": f1_metrics.get(f"F1_{c}", 0.0) for c in [1, 2]},
             "F1_macro": f1_metrics.get("F1_macro", 0.0),
-            **{f"Precision_{cls_names[c]}": f1_metrics.get(f"Precision_{c}", 0.0) for c in [1, 2, 3]},
+            **{f"Precision_{cls_names[c]}": f1_metrics.get(f"Precision_{c}", 0.0) for c in [1, 2]},
             "Precision_macro": f1_metrics.get("Precision_macro", 0.0),
-            **{f"Recall_{cls_names[c]}": f1_metrics.get(f"Recall_{c}", 0.0) for c in [1, 2, 3]},
+            **{f"Recall_{cls_names[c]}": f1_metrics.get(f"Recall_{c}", 0.0) for c in [1, 2]},
             "Recall_macro": f1_metrics.get("Recall_macro", 0.0),
             "confusion_matrix": conf_matrix.tolist(),
             "params": params,

@@ -5,7 +5,7 @@ model:
   name: mask_rcnn
   backbone: resnet101
   pretrained: coco  # COCO pretrained
-  num_classes: 4   # 3 + background
+  num_classes: 3   # 2 + background
   min_size: 640
   max_size: 640
 

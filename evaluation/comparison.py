@@ -14,22 +14,19 @@ METRIC_COLS = [
     "mIoU",
     "IoU_Fiber",
     "IoU_Fragment",
-    "IoU_Film",
     "mDice",
     "Dice_Fiber",
     "Dice_Fragment",
-    "Dice_Film",
     "mAP50",
     "mAP75",
     "F1_macro",
     "F1_Fiber",
     "F1_Fragment",
-    "F1_Film",
     "params_M",
     "inference_time_ms",
 ]
 
-CLASS_NAMES = {1: "Fiber", 2: "Fragment", 3: "Film"}
+CLASS_NAMES = {1: "Fiber", 2: "Fragment"}
 
 
 class ModelComparison:
@@ -59,17 +56,14 @@ class ModelComparison:
             "mIoU": round(metrics.get("mIoU", 0.0), 4),
             "IoU_Fiber": round(_get(iou_per_class, 1), 4),
             "IoU_Fragment": round(_get(iou_per_class, 2), 4),
-            "IoU_Film": round(_get(iou_per_class, 3), 4),
             "mDice": round(metrics.get("mDice", 0.0), 4),
             "Dice_Fiber": round(_get(dice_per_class, 1), 4),
             "Dice_Fragment": round(_get(dice_per_class, 2), 4),
-            "Dice_Film": round(_get(dice_per_class, 3), 4),
             "mAP50": round(metrics.get("mAP50", 0.0), 4),
             "mAP75": round(metrics.get("mAP75", 0.0), 4),
             "F1_macro": round(metrics.get("F1_macro", 0.0), 4),
             "F1_Fiber": round(metrics.get("F1_Fiber", 0.0), 4),
             "F1_Fragment": round(metrics.get("F1_Fragment", 0.0), 4),
-            "F1_Film": round(metrics.get("F1_Film", 0.0), 4),
             "params_M": round(metrics.get("params", 0) / 1e6, 2),
             "inference_time_ms": round(metrics.get("inference_time_ms", 0.0), 2),
         }

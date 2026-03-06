@@ -30,7 +30,7 @@ class SAM2Wrapper(BaseModel):
         super().__init__(config)
         model_cfg = config.get("model", config)
         self.freeze_image_encoder = model_cfg.get("freeze_image_encoder", True)
-        self.num_classes = model_cfg.get("num_classes", 3)
+        self.num_classes = model_cfg.get("num_classes", 2)
         self.image_size = config.get("data", {}).get("image_size", 640)
 
         self.model = self._load_model(model_cfg)

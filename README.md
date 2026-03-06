@@ -29,11 +29,10 @@ Microplastics are pervasive environmental contaminants. Automated instance segme
 
 | ID | Class | Count | Share |
 |----|-------|-------|-------|
-| 1 | Fiber | 630 | 67.0 % |
-| 2 | Fragment | 260 | 27.7 % |
-| 3 | Film | 50 | 5.3 % |
+| 1 | Fiber | 629 | 70.8 % |
+| 2 | Fragment | 260 | 29.2 % |
 
-Severe class imbalance (Film is rare) makes this a challenging benchmark.
+Class imbalance (Fiber dominant) makes this a challenging benchmark.
 
 **Splits** (grouped by base image to prevent Roboflow-augment leakage):
 
@@ -259,7 +258,6 @@ Output images are saved to `outputs/predictions/{split}/` (one file per input im
 |-------|-------|
 | Red | Fiber |
 | Green | Fragment |
-| Blue | Film |
 
 ---
 
@@ -274,8 +272,8 @@ data:
   annotation: annotation.json
   splits_file: data_splits/splits.json
   image_size: 640
-  num_classes: 3
-  class_names: [Fiber, Fragment, Film]
+  num_classes: 2
+  class_names: [Fiber, Fragment]
 training:
   output_dir: outputs/
   seed: 42
@@ -356,7 +354,7 @@ os.makedirs("images", exist_ok=True)
 | YOLO26-m | - | - | - | - | - | - |
 | YOLO26-x | - | - | - | - | - | - |
 
-Per-class metrics (Fiber / Fragment / Film) are logged to `outputs/results/comparison.csv` after running `compare_models.py`.
+Per-class metrics (Fiber / Fragment) are logged to `outputs/results/comparison.csv` after running `compare_models.py`.
 
 ---
 

@@ -34,8 +34,8 @@ class YOLO26Wrapper:
         self.config = config
         self.variant = variant
         model_cfg = config.get("model", config)
-        self.num_classes = model_cfg.get("num_classes", 3)
-        self.class_names = model_cfg.get("class_names", ["Fiber", "Fragment", "Film"])
+        self.num_classes = model_cfg.get("num_classes", 2)
+        self.class_names = model_cfg.get("class_names", ["Fiber", "Fragment"])
 
         # Accept short key ("s","m","x") or full model name ("yolo26s-seg")
         weights = self.VARIANTS.get(variant, f"{variant}.pt")

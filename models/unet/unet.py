@@ -42,7 +42,7 @@ class UNet(BaseModel):
                            false → random init (custom or smp)
         model.features   : [64, 128, 256, 512]  (custom mode only)
         model.in_channels: 3
-        model.num_classes: 3
+        model.num_classes: 2
         model.dropout    : 0.3
     """
 
@@ -50,7 +50,7 @@ class UNet(BaseModel):
         super().__init__(config)
         model_cfg = config.get("model", config)
         self._in_channels = model_cfg.get("in_channels", 3)
-        self._num_classes  = model_cfg.get("num_classes", 3)
+        self._num_classes  = model_cfg.get("num_classes", 2)
         self._features     = model_cfg.get("features", [64, 128, 256, 512])
         self._dropout_p    = model_cfg.get("dropout", 0.3)
         self._encoder_name = model_cfg.get("encoder", None)

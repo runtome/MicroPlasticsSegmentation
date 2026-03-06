@@ -36,7 +36,7 @@ def main():
     images_dir = data_cfg["images_dir"]
     splits_file = data_cfg["splits_file"]
     image_size = data_cfg.get("image_size", 640)
-    class_names = data_cfg.get("class_names", ["Fiber", "Fragment", "Film"])
+    class_names = data_cfg.get("class_names", ["Fiber", "Fragment"])
 
     # Step 1: Dataset statistics
     print("=" * 60)

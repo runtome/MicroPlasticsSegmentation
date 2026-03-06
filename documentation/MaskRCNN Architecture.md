@@ -10,7 +10,7 @@ This implementation wraps `torchvision.models.detection.maskrcnn_resnet50_fpn` w
 - **Output (train):** loss dict (box + class + mask losses)
 - **Output (eval):** per-image list of `{masks, labels, scores, boxes}` — one entry per detected instance
 - **Pretrained backbone:** Yes — **COCO pretrained ResNet-50 + FPN weights** loaded by default
-- **num_classes:** 4 (background + Fiber + Fragment + Film)
+- **num_classes:** 3 (background + Fiber + Fragment)
 
 ---
 
@@ -124,7 +124,7 @@ Torchvision requires a specific target dict format per image:
 ```python
 {
     "masks":  (N, H, W)  uint8  — binary instance masks
-    "labels": (N,)       int64  — class IDs (1=Fiber, 2=Fragment, 3=Film)
+    "labels": (N,)       int64  — class IDs (1=Fiber, 2=Fragment)
     "boxes":  (N, 4)     float  — [x1, y1, x2, y2] bounding boxes
 }
 ```

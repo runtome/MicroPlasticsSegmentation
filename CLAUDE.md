@@ -33,7 +33,7 @@ tensorboard --logdir outputs/logs
 ## Architecture
 
 ### Config System
-All configs inherit from `configs/base.yaml` via `defaults: [base]`. Model configs override only what differs. The base config defines shared paths (`images/`, `annotation.json`, `data_splits/splits.json`), `image_size: 640`, `num_classes: 3`, and training defaults. Scripts load and deep-merge both files.
+All configs inherit from `configs/base.yaml` via `defaults: [base]`. Model configs override only what differs. The base config defines shared paths (`images/`, `annotation.json`, `data_splits/splits.json`), `image_size: 640`, `num_classes: 2`, and training defaults. Scripts load and deep-merge both files.
 
 ### Model Interface
 Every model (10 total) inherits `BaseModel` (`models/base_model.py`) and implements:
@@ -66,11 +66,11 @@ Batches contain `image: (B,3,640,640)` tensor plus lists-of-tensors for masks/la
 - Transformers / foundation models: BCEDiceLoss or cross-entropy depending on model
 
 ### Evaluation outputs
-`scripts/evaluate.py` saves `outputs/results/{model}_results.json` with keys: `mIoU`, `IoU_1/2/3`, `mAP50`, `mAP75`, `F1_1/2/3`, `F1_macro`, `inference_ms`, `params`. `compare_models.py` aggregates all JSON files into a single CSV.
+`scripts/evaluate.py` saves `outputs/results/{model}_results.json` with keys: `mIoU`, `IoU_1/2`, `mAP50`, `mAP75`, `F1_1/2`, `F1_macro`, `inference_ms`, `params`. `compare_models.py` aggregates all JSON files into a single CSV.
 
 ## Key Facts
 
-- Classes: Fiber (ID 1, 67%), Fragment (ID 2, 28%), Film (ID 3, 5%) — severe imbalance
+- Classes: Fiber (ID 1, 71%), Fragment (ID 2, 29%)
 - All images resized to 640×640 before model input
 - `data/` and `training/` `__init__.py` use lazy imports to avoid eager import of albumentations/tensorboard
 - Generated artifacts (`data_splits/`, `outputs/`, `*.pth`, `*.pt`) are gitignored

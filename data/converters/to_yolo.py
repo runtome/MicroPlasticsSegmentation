@@ -32,7 +32,7 @@ def coco_to_yolo_seg(
             dataset.yaml    ← YOLO dataset config
     """
     if class_names is None:
-        class_names = ["Fiber", "Fragment", "Film"]
+        class_names = ["Fiber", "Fragment"]
 
     with open(annotation_path) as f:
         coco = json.load(f)

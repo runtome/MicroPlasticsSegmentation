@@ -30,7 +30,7 @@ class MaskRCNNWrapper(BaseModel):
     def __init__(self, config: dict):
         super().__init__(config)
         model_cfg = config.get("model", config)
-        num_classes = model_cfg.get("num_classes", 4)  # background + 3 classes
+        num_classes = model_cfg.get("num_classes", 3)  # background + 2 classes
         pretrained = model_cfg.get("pretrained", "coco")
 
         # Load with COCO weights

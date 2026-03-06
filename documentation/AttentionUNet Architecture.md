@@ -18,7 +18,7 @@ Two build modes controlled by config:
 
 - **Input:** `(B, 3, 640, 640)`
 - **Seg output:** `(B, 1, 640, 640)` — binary mask logit
-- **Cls output:** `(B, 3)` — multi-label class probabilities (Fiber / Fragment / Film)
+- **Cls output:** `(B, 2)` — multi-label class probabilities (Fiber / Fragment)
 
 ---
 

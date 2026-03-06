@@ -127,7 +127,7 @@ def _save_confusion_matrix(cm: np.ndarray, model_name: str, output_dir: Path) ->
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    cls_names = ["Fiber", "Fragment", "Film"]
+    cls_names = ["Fiber", "Fragment"]
     row_sums = cm.sum(axis=1, keepdims=True)
     cm_norm = cm.astype(float) / np.where(row_sums == 0, 1, row_sums)
 
@@ -135,8 +135,8 @@ def _save_confusion_matrix(cm: np.ndarray, model_name: str, output_dir: Path) ->
     im = ax.imshow(cm_norm, interpolation="nearest", cmap="Blues", vmin=0, vmax=1)
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
-    ax.set_xticks(range(3))
-    ax.set_yticks(range(3))
+    ax.set_xticks(range(2))
+    ax.set_yticks(range(2))
     ax.set_xticklabels(cls_names)
     ax.set_yticklabels(cls_names)
     ax.set_xlabel("Predicted Class")
@@ -144,8 +144,8 @@ def _save_confusion_matrix(cm: np.ndarray, model_name: str, output_dir: Path) ->
     ax.set_title(f"Confusion Matrix — {model_name}")
 
     thresh = 0.5
-    for i in range(3):
-        for j in range(3):
+    for i in range(2):
+        for j in range(2):
             ax.text(
                 j, i,
                 f"{cm[i, j]}\n({cm_norm[i, j]:.1%})",
@@ -175,7 +175,7 @@ def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dic
     data_cfg = config.get("data", {})
     data_yaml = data_cfg.get("yolo_yaml", "data_splits/yolo/dataset.yaml")
     imgsz = config.get("training", {}).get("imgsz", 640)
-    cls_names = ["Fiber", "Fragment", "Film"]
+    cls_names = ["Fiber", "Fragment"]
 
     model = YOLO(ckpt_path)
     print(f"Loaded YOLO checkpoint: {ckpt_path}")
@@ -214,8 +214,8 @@ def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dic
         img_id_to_anns.setdefault(ann["image_id"], []).append(ann)
 
     # Per-class IoU / Dice accumulators
-    cls_ious = {1: [], 2: [], 3: []}
-    cls_dices = {1: [], 2: [], 3: []}
+    cls_ious = {1: [], 2: []}
+    cls_dices = {1: [], 2: []}
     image_ious = []
     inference_times = []
 
@@ -304,7 +304,7 @@ def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dic
     # Aggregate pixel-level metrics
     iou_per_class = {}
     dice_per_class = {}
-    for cls_id in [1, 2, 3]:
+    for cls_id in [1, 2]:
         iou_per_class[cls_id] = float(np.mean(cls_ious[cls_id])) if cls_ious[cls_id] else 0.0
         dice_per_class[cls_id] = float(np.mean(cls_dices[cls_id])) if cls_dices[cls_id] else 0.0
 
@@ -317,7 +317,7 @@ def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dic
 
     # Image-level F1 / Precision / Recall
     f1_scores, prec_scores, rec_scores = [], [], []
-    for c in [1, 2, 3]:
+    for c in [1, 2]:
         tp = sum(c in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
         fp = sum(c in ps and c not in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
         fn = sum(c not in ps and c in gs for ps, gs in zip(all_pred_cls_sets, all_gt_cls_sets))
@@ -336,13 +336,13 @@ def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dic
     metrics["F1_macro"] = float(np.mean(f1_scores))
 
     # Image-level confusion matrix
-    conf_matrix = np.zeros((3, 3), dtype=int)
+    conf_matrix = np.zeros((2, 2), dtype=int)
     for gt_set, pred_set in zip(all_gt_cls_sets, all_pred_cls_sets):
         if not gt_set or not pred_set:
             continue
         gt_c = min(gt_set) - 1
         pred_c = min(pred_set) - 1
-        if 0 <= gt_c < 3 and 0 <= pred_c < 3:
+        if 0 <= gt_c < 2 and 0 <= pred_c < 2:
             conf_matrix[gt_c][pred_c] += 1
     metrics["confusion_matrix"] = conf_matrix.tolist()
 
@@ -351,7 +351,7 @@ def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dic
 
 def _print_and_save_results(metrics: dict, model_name: str, split: str, output_arg: str):
     """Print YOLO evaluation results (same format as standard models) and save JSON."""
-    cls_names = ["Fiber", "Fragment", "Film"]
+    cls_names = ["Fiber", "Fragment"]
 
     iou_pc = metrics.get("iou_per_class", {})
     dice_pc = metrics.get("dice_per_class", {})
@@ -364,13 +364,11 @@ def _print_and_save_results(metrics: dict, model_name: str, split: str, output_a
     print(f"  mIoU:            {metrics.get('mIoU', 0.0):.4f}")
     print(f"  IoU Fiber:       {_iou(1):.4f}")
     print(f"  IoU Fragment:    {_iou(2):.4f}")
-    print(f"  IoU Film:        {_iou(3):.4f}")
     print(f"  Image IoU:       {metrics.get('image_iou', 0.0):.4f}")
     print()
     print(f"  mDice:           {metrics.get('mDice', 0.0):.4f}")
     print(f"  Dice Fiber:      {_dice(1):.4f}")
     print(f"  Dice Fragment:   {_dice(2):.4f}")
-    print(f"  Dice Film:       {_dice(3):.4f}")
     print()
     print(f"  mAP50:           {metrics.get('mAP50', 0.0):.4f}")
     print(f"  mAP75:           {metrics.get('mAP75', 0.0):.4f}")
@@ -397,14 +395,14 @@ def _print_and_save_results(metrics: dict, model_name: str, split: str, output_a
     print(f"{'=' * 60}")
 
     # Print confusion matrix if available
-    cm = np.array(metrics.get("confusion_matrix", [[0]*3]*3))
+    cm = np.array(metrics.get("confusion_matrix", [[0]*2]*2))
     if cm.any():
         print(f"\nConfusion Matrix (rows=GT, cols=Predicted, image-level):")
         header = f"  {'':>12}" + "".join(f"{n:>12}" for n in cls_names)
         print(header)
-        print(f"  {'-' * (12 + 12*3)}")
+        print(f"  {'-' * (12 + 12*2)}")
         for i, row_name in enumerate(cls_names):
-            row_str = "".join(f"{cm[i, j]:>12}" for j in range(3))
+            row_str = "".join(f"{cm[i, j]:>12}" for j in range(2))
             print(f"  {row_name:<12}{row_str}")
         print()
 
@@ -475,8 +473,8 @@ def main():
 
     # Dataset statistics
     ds = test_loader.dataset
-    class_ids = data_cfg.get("class_ids", [1, 2, 3])
-    class_names = data_cfg.get("class_names", ["Fiber", "Fragment", "Film"])
+    class_ids = data_cfg.get("class_ids", [1, 2])
+    class_names = data_cfg.get("class_names", ["Fiber", "Fragment"])
     cls_names_map = dict(zip(class_ids, class_names))
     cls_img_count = {cid: 0 for cid in class_ids}
     for img_meta in ds.images:
@@ -512,19 +510,17 @@ def main():
     print(f"  mIoU:            {metrics['mIoU']:.4f}")
     print(f"  IoU Fiber:       {_iou(1):.4f}")
     print(f"  IoU Fragment:    {_iou(2):.4f}")
-    print(f"  IoU Film:        {_iou(3):.4f}")
     print(f"  Image IoU:       {metrics.get('image_iou', 0.0):.4f}")
     print()
     print(f"  mDice:           {metrics.get('mDice', 0.0):.4f}")
     print(f"  Dice Fiber:      {_dice(1):.4f}")
     print(f"  Dice Fragment:   {_dice(2):.4f}")
-    print(f"  Dice Film:       {_dice(3):.4f}")
     print()
     print(f"  mAP50:           {metrics['mAP50']:.4f}")
     print(f"  mAP75:           {metrics['mAP75']:.4f}")
     print()
     # Per-class F1 / Precision / Recall table
-    cls_names = ["Fiber", "Fragment", "Film"]
+    cls_names = ["Fiber", "Fragment"]
     print(f"  {'Class':<12} {'Precision':>10} {'Recall':>10} {'F1':>10}")
     print(f"  {'-'*44}")
     for cls in cls_names:
@@ -542,13 +538,13 @@ def main():
     print(f"{'=' * 60}")
 
     # Print confusion matrix
-    cm = np.array(metrics.get("confusion_matrix", [[0]*3]*3))
+    cm = np.array(metrics.get("confusion_matrix", [[0]*2]*2))
     print(f"\nConfusion Matrix (rows=GT, cols=Predicted, image-level):")
     header = f"  {'':>12}" + "".join(f"{n:>12}" for n in cls_names)
     print(header)
-    print(f"  {'-' * (12 + 12*3)}")
+    print(f"  {'-' * (12 + 12*2)}")
     for i, row_name in enumerate(cls_names):
-        row_str = "".join(f"{cm[i, j]:>12}" for j in range(3))
+        row_str = "".join(f"{cm[i, j]:>12}" for j in range(2))
         print(f"  {row_name:<12}{row_str}")
     print()
 

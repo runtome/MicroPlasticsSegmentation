@@ -109,7 +109,7 @@ class DynamicRUNext(BaseModel):
         super().__init__(config)
         model_cfg = config.get("model", config)
         in_channels = model_cfg.get("in_channels", 3)
-        num_classes = model_cfg.get("num_classes", 3)
+        num_classes = model_cfg.get("num_classes", 2)
         base_ch = model_cfg.get("base_channels", 64)
         depth = model_cfg.get("depth", 4)
         dropout_p = model_cfg.get("dropout", 0.3)

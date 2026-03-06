@@ -13,7 +13,7 @@ from PIL import Image
 from data.transforms import get_inference_transforms
 
 
-CLASS_NAMES = {0: "Background", 1: "Fiber", 2: "Fragment", 3: "Film"}
+CLASS_NAMES = {0: "Background", 1: "Fiber", 2: "Fragment"}
 
 
 class Predictor:

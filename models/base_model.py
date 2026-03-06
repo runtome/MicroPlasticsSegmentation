@@ -23,7 +23,7 @@ class BaseModel(nn.Module, ABC):
     def __init__(self, config: dict):
         super().__init__()
         self.config = config
-        self.num_classes = config.get("num_classes", 3)
+        self.num_classes = config.get("num_classes", 2)
 
     @abstractmethod
     def forward(self, x: torch.Tensor) -> Any:

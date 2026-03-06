@@ -21,7 +21,7 @@ class MicroPlasticsDataset(Dataset):
     Each item returns:
         image: (C, H, W) float32 tensor, normalized
         masks: (N, H, W) binary float32 tensor — one mask per instance
-        labels: (N,) int64 tensor — category id (1-indexed, 1=Fiber, 2=Fragment, 3=Film)
+        labels: (N,) int64 tensor — category id (1-indexed, 1=Fiber, 2=Fragment)
         boxes:  (N, 4) float32 tensor — [x1, y1, x2, y2]
         image_id: int
         file_name: str

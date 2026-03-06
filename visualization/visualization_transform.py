@@ -3,7 +3,7 @@
 Visualize each augmentation transform per class.
 
 For every combination of:
-    augmentation  × class (Fiber / Fragment / Film)
+    augmentation  × class (Fiber / Fragment)
 
 Saves a side-by-side JPG:  Original  |  Augmented
 Filename: {AugmentName}_{ClassName}.jpg
@@ -37,7 +37,7 @@ OUT_DIR = ROOT / "paper_figures" / "transforms"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Dataset constants ─────────────────────────────────────────────────────────
-CLASSES = {1: "Fiber", 2: "Fragment", 3: "Film"}
+CLASSES = {1: "Fiber", 2: "Fragment"}
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -163,7 +163,7 @@ def save_comparison(
     )
 
     # ── Class badge (top-left of augmented panel) ─────────────────────────────
-    badge_colors = {"Fiber": "#1B5E20", "Fragment": "#0D47A1", "Film": "#B71C1C"}
+    badge_colors = {"Fiber": "#1B5E20", "Fragment": "#0D47A1"}
     badge_col = badge_colors.get(cls_name, "#37474F")
     axes[1].text(
         0.02, 0.97, cls_name,
@@ -201,7 +201,7 @@ def save_grid_summary(
                              figsize=(4 * n_cols, 3.5 * n_rows))
     fig.patch.set_facecolor("white")
 
-    badge_colors = {"Fiber": "#1B5E20", "Fragment": "#0D47A1", "Film": "#B71C1C"}
+    badge_colors = {"Fiber": "#1B5E20", "Fragment": "#0D47A1"}
 
     # Pre-load originals
     originals = {}

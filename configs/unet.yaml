@@ -6,7 +6,7 @@ model:
   encoder: efficientnet-b3   # smp encoder name — set to null for custom scratch build
   pretrained: true         # true = ImageNet weights via smp; false = random init
   in_channels: 3
-  num_classes: 3
+  num_classes: 2
   features: [64, 128, 256, 512]   # used only when encoder: null
   dropout: 0.3
 

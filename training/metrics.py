@@ -164,7 +164,7 @@ def compute_map(
     Returns dict with 'mAP' and per-class 'AP_{class_id}'.
     """
     if class_ids is None:
-        class_ids = [1, 2, 3]  # Fiber, Fragment, Film
+        class_ids = [1, 2]  # Fiber, Fragment
 
     class_results = {c: [] for c in class_ids}
     n_gt_per_class = {c: 0 for c in class_ids}
@@ -220,7 +220,7 @@ def compute_f1(
 ) -> Dict[str, float]:
     """Compute per-class and macro F1."""
     if class_ids is None:
-        class_ids = [1, 2, 3]
+        class_ids = [1, 2]
 
     results = {}
     f1_scores = []

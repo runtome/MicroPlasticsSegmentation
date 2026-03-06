@@ -12,7 +12,7 @@ Same dual-head design: segmentation head + parallel classification head.
 
 - **Input:** `(B, 3, 640, 640)`
 - **Seg output:** `(B, 1, 640, 640)` — binary mask logit
-- **Cls output:** `(B, 3)` — multi-label class probabilities (Fiber / Fragment / Film)
+- **Cls output:** `(B, 2)` — multi-label class probabilities (Fiber / Fragment)
 - **Pretrained encoder:** No — trained from random initialization (Kaiming / Xavier)
 
 ---
@@ -144,7 +144,7 @@ out = w[:,0]*Conv0(x) + w[:,1]*Conv1(x) + w[:,2]*Conv2(x) + w[:,3]*Conv3(x)
 out = ReLU(BN(out))
 ```
 
-This means **different images in the same batch can use different kernel blends** — the model adapts its convolution style to input content (e.g., elongated Fiber vs rounded Fragment vs flat Film).
+This means **different images in the same batch can use different kernel blends** — the model adapts its convolution style to input content (e.g., elongated Fiber vs rounded Fragment).
 
 ---
 

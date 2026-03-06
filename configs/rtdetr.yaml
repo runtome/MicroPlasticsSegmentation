@@ -4,15 +4,13 @@ defaults:
 model:
   name: rtdetr
   pretrained_model: PekingU/rtdetr-r50
-  num_classes: 3
+  num_classes: 2
   id2label:
     0: Fiber
     1: Fragment
-    2: Film
   label2id:
     Fiber: 0
     Fragment: 1
-    Film: 2
 
 training:
   optimizer: adamw

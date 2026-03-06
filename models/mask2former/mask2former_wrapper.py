@@ -29,9 +29,9 @@ class Mask2FormerWrapper(BaseModel):
         pretrained = model_cfg.get(
             "pretrained_model", "facebook/mask2former-swin-base-coco-instance"
         )
-        num_classes = model_cfg.get("num_classes", 3)
-        id2label = model_cfg.get("id2label", {0: "Fiber", 1: "Fragment", 2: "Film"})
-        label2id = model_cfg.get("label2id", {"Fiber": 0, "Fragment": 1, "Film": 2})
+        num_classes = model_cfg.get("num_classes", 2)
+        id2label = model_cfg.get("id2label", {0: "Fiber", 1: "Fragment"})
+        label2id = model_cfg.get("label2id", {"Fiber": 0, "Fragment": 1})
 
         id2label = {int(k): v for k, v in id2label.items()}
 

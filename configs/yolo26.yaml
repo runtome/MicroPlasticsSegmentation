@@ -4,8 +4,8 @@ defaults:
 model:
   name: yolo26
   variants: [yolo11s-seg, yolo11m-seg, yolo11x-seg]  # Ultralytics seg models
-  num_classes: 3
-  class_names: [Fiber, Fragment, Film]
+  num_classes: 2
+  class_names: [Fiber, Fragment]
 
 data:
   yolo_data_dir: data_splits/yolo/

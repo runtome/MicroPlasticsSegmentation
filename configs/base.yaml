@@ -3,9 +3,9 @@ data:
   annotation: /kaggle/input/microplasticssegmentation/annotation.json
   splits_file: data_splits/splits.json
   image_size: 640
-  num_classes: 3
-  class_names: [Fiber, Fragment, Film]
-  class_ids: [1, 2, 3]
+  num_classes: 2
+  class_names: [Fiber, Fragment]
+  class_ids: [1, 2]
 
 training:
   output_dir: outputs/

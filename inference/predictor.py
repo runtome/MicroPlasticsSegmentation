@@ -48,6 +48,8 @@ class Predictor:
         """
         if isinstance(image_input, (str, Path)):
             img = cv2.imread(str(image_input))
+            if img is None:
+                raise FileNotFoundError(f"Failed to load image: {image_input}")
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         elif isinstance(image_input, np.ndarray):
             img = image_input

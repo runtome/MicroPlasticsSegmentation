@@ -53,11 +53,14 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def set_seed(seed: int):
+    """Set seeds for reproducibility. Note: deterministic mode may reduce performance."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 
 def get_model(config: dict):
@@ -127,7 +130,7 @@ def train_one(config_path: str, device: str = None, fold: int = None, resume: st
     splits_file = data_cfg["splits_file"]
     image_size = data_cfg.get("image_size", 640)
     batch_size = config.get("training", {}).get("batch_size", 8)
-    num_workers = 4
+    num_workers = config.get("training", {}).get("num_workers", 4)
 
     from data.dataloader import build_dataloader
     from training.trainer import Trainer

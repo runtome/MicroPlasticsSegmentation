@@ -63,6 +63,7 @@ class Evaluator:
 
         iou_list = []
         inference_times = []
+        n_skipped = 0
 
         for batch in test_loader:
             images = batch["image"]
@@ -76,7 +77,8 @@ class Evaluator:
                 try:
                     pred = self.model.predict(img, threshold=0.5)
                 except Exception as e:
-                    print(f"Predict error: {e}")
+                    n_skipped += 1
+                    print(f"WARNING: Predict failed on image {i} (skipped {n_skipped} so far): {e}")
                     continue
                 t1 = time.perf_counter()
                 inference_times.append((t1 - t0) * 1000)
@@ -138,6 +140,11 @@ class Evaluator:
                     pred_union = pmasks.max(axis=0)
                     iou_list.append(compute_iou(pred_union, gt_union))
 
+        if n_skipped > 0:
+            total = n_skipped + len(all_pred_masks)
+            print(f"WARNING: {n_skipped}/{total} images skipped due to prediction errors. "
+                  f"Metrics may be biased (hard samples dropped).")
+
         # Compute mAP at 0.5 and 0.75
         map50 = compute_map(
             all_pred_masks, all_pred_scores, all_pred_labels,
@@ -197,15 +204,23 @@ class Evaluator:
         f1_metrics["Precision_macro"] = float(np.mean(prec_scores))
         f1_metrics["Recall_macro"] = float(np.mean(rec_scores))
 
-        # Image-level confusion matrix (one GT class vs one predicted class per image)
+        # Image-level confusion matrix: for each GT class in the image,
+        # record which class was predicted. Multi-label images contribute
+        # one row per GT class present.
         conf_matrix = np.zeros((2, 2), dtype=int)
         for gt_cls_set, pred_cls_set in zip(all_gt_cls_sets, all_pred_cls_sets):
-            if not gt_cls_set or not pred_cls_set:
+            if not gt_cls_set:
                 continue
-            gt_c = min(gt_cls_set) - 1       # single GT class per image
-            pred_c = min(pred_cls_set) - 1   # primary predicted class
-            if 0 <= gt_c < 2 and 0 <= pred_c < 2:
-                conf_matrix[gt_c][pred_c] += 1
+            for gt_c in gt_cls_set:
+                if gt_c < 1 or gt_c > 2:
+                    continue
+                if gt_c in pred_cls_set:
+                    conf_matrix[gt_c - 1][gt_c - 1] += 1  # correct
+                else:
+                    # Misclassified: attribute to whatever was predicted
+                    for pred_c in pred_cls_set:
+                        if 1 <= pred_c <= 2:
+                            conf_matrix[gt_c - 1][pred_c - 1] += 1
 
         params = self.model.count_parameters() if hasattr(self.model, "count_parameters") else 0
         avg_inference_ms = float(np.mean(inference_times)) if inference_times else 0.0

@@ -172,13 +172,20 @@ def compute_map(
     for pmasks, pscores, plabels, gmasks, glabels in zip(
         all_pred_masks, all_pred_scores, all_pred_labels, all_gt_masks, all_gt_labels
     ):
-        if len(gmasks) == 0:
-            continue
         pmasks_np = np.array(pmasks) if not isinstance(pmasks, np.ndarray) else pmasks
         pscores_np = np.array(pscores) if not isinstance(pscores, np.ndarray) else pscores
         plabels_np = np.array(plabels) if not isinstance(plabels, np.ndarray) else plabels
         gmasks_np = np.array(gmasks) if not isinstance(gmasks, np.ndarray) else gmasks
         glabels_np = np.array(glabels) if not isinstance(glabels, np.ndarray) else glabels
+
+        if len(gmasks_np) == 0:
+            # No GT: all predictions are false positives
+            if len(pmasks_np) > 0:
+                for k in range(len(pmasks_np)):
+                    c = int(plabels_np[k])
+                    if c in class_results:
+                        class_results[c].append((float(pscores_np[k]), False))
+            continue
 
         if len(pmasks_np) == 0:
             for c in class_ids:

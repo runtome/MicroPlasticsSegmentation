@@ -335,15 +335,22 @@ def _evaluate_yolo(config: dict, ckpt_path: str, split: str, device: str) -> dic
     metrics["Recall_macro"] = float(np.mean(rec_scores))
     metrics["F1_macro"] = float(np.mean(f1_scores))
 
-    # Image-level confusion matrix
+    # Image-level confusion matrix: for each GT class in the image,
+    # record which class was predicted. Multi-label images contribute
+    # one row per GT class present.
     conf_matrix = np.zeros((2, 2), dtype=int)
     for gt_set, pred_set in zip(all_gt_cls_sets, all_pred_cls_sets):
-        if not gt_set or not pred_set:
+        if not gt_set:
             continue
-        gt_c = min(gt_set) - 1
-        pred_c = min(pred_set) - 1
-        if 0 <= gt_c < 2 and 0 <= pred_c < 2:
-            conf_matrix[gt_c][pred_c] += 1
+        for gt_c in gt_set:
+            if gt_c < 1 or gt_c > 2:
+                continue
+            if gt_c in pred_set:
+                conf_matrix[gt_c - 1][gt_c - 1] += 1  # correct
+            else:
+                for pred_c in pred_set:
+                    if 1 <= pred_c <= 2:
+                        conf_matrix[gt_c - 1][pred_c - 1] += 1
     metrics["confusion_matrix"] = conf_matrix.tolist()
 
     return metrics

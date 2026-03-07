@@ -231,7 +231,7 @@ class Trainer:
 
         print(f"\nTraining summary: {total_epochs} epochs in {fit_time:.1f}s (avg {avg_per_epoch:.1f}s/epoch)")
 
-        if self.writer is not None:
+        if self.writer is not None and fold is None:
             self.writer.close()
         return best_metrics
 
@@ -308,5 +308,8 @@ class Trainer:
             print(f"  Mean val_miou: {np.mean(mious):.4f} (+/- {np.std(mious):.4f})")
         print(f"  Total training time: {total_time:.1f}s ({total_time/60:.1f}min)")
         print(f"{'='*60}")
+
+        if self.writer is not None:
+            self.writer.close()
 
         return fold_results

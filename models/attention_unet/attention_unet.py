@@ -148,16 +148,20 @@ class AttentionUNet(BaseModel):
         # enc_channels indices: 0=input, 1..N=stages
         # We decode from the deepest (last) back to shallowest
         # Skip connections come from stages [N-1, N-2, ..., 1]
+        # Some encoders (e.g. mit_b2) have 0-channel stages — skip those
         n = len(enc_channels) - 1  # number of encoder stages (excl. input)
         bottleneck_ch = enc_channels[n]
 
         self.bottleneck_dropout = nn.Dropout2d(self._dropout_p)
 
+        # Collect valid skip indices (non-zero channels, excluding bottleneck)
+        self._skip_indices = [i for i in range(n - 1, 0, -1) if enc_channels[i] > 0]
+
         # Build decoder blocks: from bottleneck upward
         # Each block: AttentionUp(in_ch=prev_decoder_out, skip_ch=enc_channels[i], out_ch)
         self.attn_ups = nn.ModuleList()
         dec_ch = bottleneck_ch
-        for i in range(n - 1, 0, -1):  # skip stages n-1, n-2, ..., 1
+        for i in self._skip_indices:
             skip_ch = enc_channels[i]
             out_ch = skip_ch  # match skip channel width
             f_int = max(skip_ch // 2, 16)
@@ -253,9 +257,7 @@ class AttentionUNet(BaseModel):
 
         # Decoder with attention gates on skip connections
         d = bottleneck
-        for i, attn_up in enumerate(self.attn_ups):
-            # Skip from encoder: stages n-1, n-2, ..., 1
-            skip_idx = len(enc_features) - 2 - i
+        for skip_idx, attn_up in zip(self._skip_indices, self.attn_ups):
             d = attn_up(d, enc_features[skip_idx])
 
         seg_out = self.outc(d)

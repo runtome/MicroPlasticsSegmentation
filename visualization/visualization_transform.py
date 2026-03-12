@@ -23,6 +23,8 @@ import json
 import sys
 from pathlib import Path
 
+import random
+
 import cv2
 import numpy as np
 import matplotlib
@@ -89,13 +91,18 @@ def find_samples(coco: dict, images_dir: Path) -> dict:
 
     samples = {}
     for cls_id in CLASSES:
-        # prefer exclusive images first, then any
-        for exclusive in [True, False]:
-            for img_id, cats in img_to_cats.items():
-                if cls_id not in cats:
-                    continue
-                if exclusive and len(cats) > 1:
-                    continue
+        exclusive_ids = []
+        mixed_ids = []
+        for img_id, cats in img_to_cats.items():
+            if cls_id not in cats:
+                continue
+            (exclusive_ids if len(cats) == 1 else mixed_ids).append(img_id)
+
+        random.shuffle(exclusive_ids)
+        random.shuffle(mixed_ids)
+
+        for candidate_ids in (exclusive_ids, mixed_ids):
+            for img_id in candidate_ids:
                 path = images_dir / id_to_file[img_id]
                 if path.exists():
                     samples[cls_id] = path
@@ -269,10 +276,17 @@ def main():
     parser.add_argument("--anno",       default=None, help="Path to annotation.json")
     parser.add_argument("--images-dir", default=None, help="Path to images directory")
     parser.add_argument("--out-dir",    default=str(OUT_DIR), help="Output directory")
+    parser.add_argument("--seed",       type=int, default=None, help="Random seed for reproducible augmentations")
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Set random seed ─────────────────────────────────────────────────────
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        print(f"Random seed : {args.seed}")
 
     # ── Resolve paths ─────────────────────────────────────────────────────────
     if args.anno:
@@ -327,7 +341,10 @@ def main():
             print(f"  SKIP: {e}")
             continue
 
-        for aug_name, aug in augmentations.items():
+        for aug_idx, (aug_name, aug) in enumerate(augmentations.items()):
+            if args.seed is not None:
+                random.seed(args.seed + aug_idx)
+                np.random.seed(args.seed + aug_idx)
             try:
                 augmented = apply_aug(original.copy(), aug)
                 out_path  = save_comparison(original, augmented,

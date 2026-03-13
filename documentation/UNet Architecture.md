@@ -9,8 +9,8 @@ Supports **two build modes** controlled by `configs/unet.yaml`:
 | Mode | Config | Encoder | Weights |
 |------|--------|---------|---------|
 | A — Custom | `encoder: null` | DoubleConv/Down blocks | Kaiming / Xavier (from scratch) |
-| B — Pretrained | `encoder: resnet34` + `pretrained: true` | ResNet34 via smp | ImageNet pretrained |
-| B — SMP no pretrain | `encoder: resnet34` + `pretrained: false` | ResNet34 via smp | Random init |
+| B — Pretrained | `encoder: efficientnet-b3` + `pretrained: true` | EfficientNet-B3 via smp | ImageNet pretrained |
+| B — SMP no pretrain | `encoder: efficientnet-b3` + `pretrained: false` | EfficientNet-B3 via smp | Random init |
 
 - **Input:** `(B, 3, 640, 640)`
 - **Seg output:** `(B, 1, 640, 640)` — binary mask logit per image
@@ -82,17 +82,17 @@ INPUT: (B, 3, 640, 640)
 ```
 INPUT: (B, 3, 640, 640)
 │
-├─ ENCODER: ResNet34 (pretrained ImageNet)
-│   layer0 →  (B,  64, 160, 160)   f1
-│   layer1 →  (B,  64,  80,  80)   f2
-│   layer2 →  (B, 128,  40,  40)   f3
-│   layer3 →  (B, 256,  20,  20)   f4
-│   layer4 →  (B, 512,  10,  10)   f5  ← BOTTLENECK
+├─ ENCODER: EfficientNet-B3 (pretrained ImageNet)
+│   stage0 →  (B,  40, 320, 320)   f1
+│   stage1 →  (B,  32, 160, 160)   f2
+│   stage2 →  (B,  48,  80,  80)   f3
+│   stage3 →  (B, 136,  40,  40)   f4
+│   stage4 →  (B, 384,  20,  20)   f5  ← BOTTLENECK
 │
 ├─── CLASSIFICATION HEAD (from bottleneck f5)
-│    AdaptiveAvgPool2d(1)  →  (B, 512, 1, 1)
-│    Flatten               →  (B, 512)
-│    Linear(512 → 256)     →  ReLU  →  Dropout(0.3)
+│    AdaptiveAvgPool2d(1)  →  (B, 384, 1, 1)
+│    Flatten               →  (B, 384)
+│    Linear(384 → 256)     →  ReLU  →  Dropout(0.3)
 │    Linear(256 → 3)       →  Sigmoid
 │    OUTPUT: (B, 3)
 │
@@ -104,28 +104,28 @@ INPUT: (B, 3, 640, 640)
      segmentation_head Conv3×3 → Conv1×1  →  (B, 1, 640, 640)  ← seg logit
 ```
 
-### Channel Sizes (ResNet34 encoder)
+### Channel Sizes (EfficientNet-B3 encoder)
 
 | Stage        | out_ch | Spatial (input 640×640) |
 |--------------|--------|-------------------------|
-| encoder f1   | 64     | 160 × 160               |
-| encoder f2   | 64     | 80 × 80                 |
-| encoder f3   | 128    | 40 × 40                 |
-| encoder f4   | 256    | 20 × 20                 |
-| encoder f5   | 512    | 10 × 10  (bottleneck)   |
+| encoder f1   | 40     | 320 × 320               |
+| encoder f2   | 32     | 160 × 160               |
+| encoder f3   | 48     | 80 × 80                 |
+| encoder f4   | 136    | 40 × 40                 |
+| encoder f5   | 384    | 20 × 20  (bottleneck)   |
 
 ### Parameters Comparison
 
 | Mode | Encoder | Total params |
 |------|---------|-------------|
 | A — Custom | DoubleConv (scratch) | ~17.4 M |
-| B — smp ResNet34 | ResNet34 (ImageNet) | ~24.6 M |
+| B — smp EfficientNet-B3 | EfficientNet-B3 (ImageNet) | ~16.0 M |
 
 ### Weight Initialization (Mode B)
 
 | Component | Init |
 |-----------|------|
-| ResNet34 encoder | ImageNet pretrained weights (frozen-capable but unfrozen by default) |
+| EfficientNet-B3 encoder | ImageNet pretrained weights (frozen-capable but unfrozen by default) |
 | smp decoder | smp default init |
 | Classification head | Xavier normal (Linear), bias=0 |
 
@@ -179,10 +179,10 @@ Sigmoid applied at inference: `mask = sigmoid(logit) > 0.5`
 Parallel branch attached to the bottleneck, not the decoder output.
 
 ```
-bottleneck: (B, 512, H', W')
-  → AdaptiveAvgPool2d(1)   →  (B, 512, 1, 1)
-  → Flatten                →  (B, 512)
-  → Linear(512, 256)       →  (B, 256)
+bottleneck: (B, C, H', W')        # C = 512 (Mode A) or 384 (Mode B, EfficientNet-B3)
+  → AdaptiveAvgPool2d(1)   →  (B, C, 1, 1)
+  → Flatten                →  (B, C)
+  → Linear(C, 256)         →  (B, 256)
   → ReLU
   → Dropout(0.3)
   → Linear(256, 3)         →  (B, 3)
@@ -250,9 +250,10 @@ encoder: efficientnet-b0   # 5.3M params
 encoder: mobileone_s0      # lightest option
 
 # ── Medium — good balance (current default) ────────────────────────────────
-encoder: resnet34          # 21M params  ← current
+encoder: resnet34          # 21M params
 encoder: resnet50          # 25M params
 encoder: efficientnet-b2   # 9.1M params
+encoder: efficientnet-b3   # 12M params   ← current
 encoder: densenet121       # 8M params
 
 # ── Heavy — best accuracy, slower training ─────────────────────────────────
